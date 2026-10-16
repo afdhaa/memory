@@ -59,7 +59,7 @@ omp meminta konfirmasi karena skill ini membawa script.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-67 tes otomatis di repo sementara (tidak menyentuh project/memori Anda). Lulus di bash 5 +
+76 tes otomatis di repo sementara (tidak menyentuh project/memori Anda). Lulus di bash 5 +
 mawk/gawk dan bash 3.2 + BWK awk (macOS). Installer tidak butuh python/node/jq: hooks digabung
 ke `settings.json`/`hooks.json` yang sudah ada dengan awk, hook lain tetap utuh (backup `.bak`).
 

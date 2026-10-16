@@ -5,6 +5,7 @@
 # the Map in index.md and fills "Key facts" while that section is still empty. --print only prints the block.
 # Reads file names, manifests and git history; never reads .env values. Pure bash + awk + git.
 set -u
+export LC_ALL=C   # byte semantics: odd encodings in READMEs/manifests never crash awk; stable sort order
 ROOT="$1"; MODE="${2:-write}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || exit 1
@@ -17,12 +18,15 @@ jget() { awk -v keys="$2" -f "$HERE/json.awk" -f "$HERE/json-get.awk" "$1" 2>/de
 has() { [ -f "$1" ]; }
 join() { awk -v sep="$1" 'NF { s = s (n++ ? sep : "") $0 } END { print s }'; }
 lower() { tr 'A-Z' 'a-z'; }
+# clip <bytes>: shorten long lines at a word boundary (never inside a multi-byte character)
+clip() { awk -v n="$1" 'BEGIN { hi = sprintf("[%c-%c]+$", 128, 255) }
+  { s = $0; if (length(s) > n) { s = substr(s, 1, n); if (!sub(/ [^ ]*$/, "", s)) sub(hi, "", s); s = s "…" } print s }'; }
 
 # ---- files (relative to ROOT), without memory/agent folders ----
 if [ -n "$IS_GIT" ]; then FILES="$(git -c core.quotePath=false ls-files -co --exclude-standard 2>/dev/null)"
 else FILES="$(find . \( -name .git -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target \
   -o -name .venv -o -name venv -o -name __pycache__ -o -name .next -o -name .cache \) -prune -o -type f -print 2>/dev/null | sed 's#^\./##')"; fi
-FILES="$(printf '%s\n' "$FILES" | grep -vE '^(\.memory|\.agents|\.claude|\.codex|\.omp|\.git)/' | grep -v '^$' | sort)"
+FILES="$(printf '%s\n' "$FILES" | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp|\.git)/' | grep -v '^$' | sort)"
 NFILES="$(printf '%s\n' "$FILES" | grep -c .)"
 root_has() { printf '%s\n' "$FILES" | grep -qxE "$1"; }
 
@@ -53,8 +57,7 @@ if has package.json; then
   [ -n "$node_ver" ] && STACK="${STACK}- Node version (engines): $node_ver"$'\n'
   ws="$(printf '%s\n' "$PKG" | awk -F'\t' '$1 == "workspaces" && $3 !~ /^[{[]/ { print $3 }' | join ', ')"
   [ -n "$ws" ] && STACK="${STACK}- Workspaces: $ws"$'\n'
-  CMDS="${CMDS}$(printf '%s\n' "$PKG" | awk -F'\t' -v run="$RUN" '$1 == "scripts" && n++ < 25 {
-    c = $3; if (length(c) > 90) c = substr(c, 1, 87) "…"; print "- `" run " " $2 "` — " c }')"$'\n'
+  CMDS="${CMDS}$(printf '%s\n' "$PKG" | awk -F'\t' -v run="$RUN" '$1 == "scripts" && n++ < 25 { print "- `" run " " $2 "` — " $3 }' | clip 120)"$'\n'
   FACT_CMDS="$(printf '%s\n' "$PKG" | awk -F'\t' -v run="$RUN" '$1 == "scripts" { S[$2] = 1 }
     END { n = split("dev start build test lint typecheck", W, " "); for (i = 1; i <= n; i++) if (W[i] in S) print "`" run " " W[i] "`" }' | join ' · ')"
 fi
@@ -89,7 +92,7 @@ if has composer.json; then
   CP="$(jget composer.json "require require-dev scripts")"
   fw="$(printf '%s\n' "$CP" | awk -F'\t' '$1 ~ /^require/ { print $2 }' | awk '{ n = split("laravel/framework:Laravel symfony/framework-bundle:Symfony slim/slim:Slim phpunit/phpunit:PHPUnit pestphp/pest:Pest", P, " "); for (i = 1; i <= n; i++) { split(P[i], kv, ":"); if ($0 == kv[1]) print kv[2] } }' | join ', ')"
   STACK="${STACK}- PHP (Composer)${fw:+ — $fw}"$'\n'
-  CMDS="${CMDS}$(printf '%s\n' "$CP" | awk -F'\t' '$1 == "scripts" && n++ < 15 { c = $3; if (length(c) > 90) c = substr(c, 1, 87) "…"; print "- `composer run " $2 "` — " c }')"$'\n'
+  CMDS="${CMDS}$(printf '%s\n' "$CP" | awk -F'\t' '$1 == "scripts" && n++ < 15 { print "- `composer run " $2 "` — " $3 }' | clip 120)"$'\n'
   has artisan && CMDS="${CMDS}- \`php artisan serve\` · \`php artisan test\` — (Laravel)"$'\n'
 fi
 if has Gemfile; then fw="$(known Gemfile "rails:Rails sinatra:Sinatra rspec:RSpec sidekiq:Sidekiq")"; STACK="${STACK}- Ruby (Bundler)${fw:+ — $fw}"$'\n'; fi
@@ -112,16 +115,20 @@ for mf in Makefile makefile GNUmakefile; do
 done
 for jf in justfile Justfile .justfile; do
   has "$jf" || continue
-  t="$(awk '/^[A-Za-z][A-Za-z0-9_-]*( [^:=]*)?:([^=]|$)/ { r = $1; sub(/:.*/, "", r); if (!s[r]++ && n++ < 15) print "`just " r "`" }' "$jf" | join ' · ')"
+  t="$(awk '/^@?[A-Za-z_][A-Za-z0-9_-]*( [^:]*)?:([^=]|$)/ { r = $1; sub(/^@/, "", r); sub(/:.*/, "", r); if (!s[r]++ && n++ < 15) print "`just " r "`" }' "$jf" | join ' · ')"
   [ -n "$t" ] && CMDS="${CMDS}- $t"$'\n'; break
 done
 
 # ---- infrastructure, CI, deploy ----
 INFRA=""
-for f in $(printf '%s\n' "$FILES" | grep -E '^(docker-compose|compose)[^/]*\.ya?ml$'); do
-  sv="$(awk '/^services:/ { on = 1; next } on && /^[^ #]/ { on = 0 } on && /^  [A-Za-z0-9_.-]+:/ { s = $1; sub(/:$/, "", s); print s }' "$f" | join ', ')"
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  sv="$(awk '/^services:/ { on = 1; ind = 0; next } on && /^[^ #]/ { on = 0 }
+    on && /^ +[A-Za-z0-9_.-]+:/ { match($0, /^ +/); if (!ind) ind = RLENGTH; if (RLENGTH == ind) { s = $1; sub(/:$/, "", s); print s } }' "$f" | join ', ')"
   INFRA="${INFRA}- \`$f\`${sv:+ — services: $sv}"$'\n'
-done
+done <<EOF
+$(printf '%s\n' "$FILES" | grep -E '^(docker-compose|compose)[^/]*\.ya?ml$')
+EOF
 df="$(printf '%s\n' "$FILES" | grep -E '(^|/)Dockerfile[^/]*$' | head -n 6 | sed 's/.*/`&`/' | join ', ')"
 [ -n "$df" ] && INFRA="${INFRA}- Docker: $df"$'\n'
 wf="$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' | sed 's#^\.github/workflows/##' | join ', ')"
@@ -165,21 +172,29 @@ nd="$(printf '%s\n' "$FILES" | grep -cE '^docs?/.*\.(md|mdx|rst)$')"; [ "$nd" -g
 
 # ---- README summary ----
 README_F=""; for f in README.md readme.md Readme.md README.rst README.txt README; do has "$f" && { README_F="$f"; break; }; done
-README_SUM=""
-[ -n "$README_F" ] && README_SUM="$(awk '
-  /^[[:space:]]*```/ { code = !code; next } code { next }
-  /^[[:space:]]*$/ { if (p != "") exit; next }
-  /^#|^[=-]+$|^[[:space:]]*(<|!\[|\[!\[|>|\||---)/ { if (p != "") exit; next }
-  { p = p (p != "" ? " " : "") $0 }
-  END { gsub(/[[:space:]]+/, " ", p); if (length(p) > 320) p = substr(p, 1, 317) "…"; print p }' "$README_F")"
-TITLE="$( [ -n "$README_F" ] && awk '/^# / { sub(/^# +/, ""); print; exit }' "$README_F")"
+README_SUM=""; TITLE=""
+if [ -n "$README_F" ]; then
+  # first paragraph of prose (no code, HTML, badges, quotes, tables); title = first "# " or setext "===" heading
+  R="$(awk '
+    /^[[:space:]]*(```|~~~)/ { code = !code; next } code { next }
+    cm { if (/-->/) cm = 0; next }
+    /^[[:space:]]*<!--/ { if (!/-->/) cm = 1; next }
+    /^=+[[:space:]]*$/ || /^-+[[:space:]]*$/ { if (p != "" && !multi) { if (title == "" && /^=/) title = p; p = ""; next } if (p != "") exit; next }
+    /^# / { if (title == "") { t = $0; sub(/^# +/, "", t); title = t } if (p != "") exit; next }
+    /^#/ { if (p != "") exit; next }
+    /^[[:space:]]*$/ { if (p != "") exit; next }
+    /^[[:space:]]*(<|!\[|\[!\[|>|\|)/ { if (p != "") exit; next }
+    { multi = (p != ""); p = p (p != "" ? " " : "") $0 }
+    END { gsub(/[[:space:]]+/, " ", p); print title; print p }' "$README_F")"
+  TITLE="$(printf '%s\n' "$R" | sed -n 1p | clip 80)"; README_SUM="$(printf '%s\n' "$R" | sed -n 2p | clip 320)"
+fi
 
 # ---- git ----
 GIT=""; ACTIVE=""
 if [ -n "$IS_GIT" ] && [ -n "$HEAD_SHA" ]; then
   remote="$(git remote get-url origin 2>/dev/null | sed -E 's#://[^@/]+@#://#')"
-  GIT="- Git: branch \`$(git rev-parse --abbrev-ref HEAD)\`, $(git rev-list --count HEAD) commits, last $(git log -1 --format=%cs)${remote:+, origin \`$remote\`}"
-  ACTIVE="$(git log -n 300 --name-only --format= --relative 2>/dev/null | grep -v '^$' | grep -vE '^(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
+  GIT="- Git: branch \`$(git rev-parse --abbrev-ref HEAD)\`, commits: $(git rev-list --count HEAD), last $(git log -1 --format=%cs)${remote:+, origin \`$remote\`}"
+  ACTIVE="$(git -c core.quotePath=false log -n 300 --name-only --format= --relative 2>/dev/null | grep -v '^$' | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
     awk -F/ '{ k = (NF > 2) ? $1 "/" $2 "/" : ((NF == 2) ? $1 "/" : $1); c[k]++ } END { for (k in c) print c[k] "\t" k }' |
     sort -t"$TAB" -k1,1nr -k2,2 | head -n 8 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
 fi
@@ -249,7 +264,7 @@ if ! grep -q 'topics/codebase\.md' "$IDX"; then
   echo "~ $IDX (Map: topics/codebase.md)"
 fi
 FACTS=""
-[ -n "$LANG_TOP$STACK" ] && FACTS="- Stack: $(printf '%s\n' "$LANG_TOP" "$(printf '%s\n' "$STACK" | grep -E '^- [A-Z.]' | grep -v 'version' | head -n 3 | sed 's/^- //')" | grep -v '^$' | join ' · ')"
+[ -n "$LANG_TOP$STACK" ] && FACTS="- Stack: $(printf '%s\n' "$LANG_TOP" "$(printf '%s\n' "$STACK" | grep -E '^- (Node\.js|Python|Go |Rust|PHP|Ruby|Java|\.NET|Dart|Elixir|Deno)' | head -n 3 | sed 's/^- //')" | grep -v '^$' | join ' · ')"
 [ -n "$FACT_CMDS" ] && FACTS="${FACTS:+$FACTS
 }- Commands: $FACT_CMDS"
 [ -n "$TOP_DIRS" ] && FACTS="${FACTS:+$FACTS

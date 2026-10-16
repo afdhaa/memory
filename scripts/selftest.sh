@@ -145,7 +145,8 @@ check "--remove-hooks keeps other hooks and settings" 'valid_json "$(cat .claude
 
 echo "• scan (new project)"
 S="$TMP/shop"; mkdir -p "$S/src/app" "$S/tests" && cd "$S" && git init -q && git config user.email t@t && git config user.name t
-printf '{"name":"shop","packageManager":"pnpm@9.0.0","scripts":{"dev":"next dev","test":"vitest run"},"dependencies":{"next":"^14.2.3"}}\n' > package.json
+printf '{"name":"shop","packageManager":"pnpm@9.0.0","workspaces":["apps/*"],"scripts":{"dev":"next dev","test":"vitest run","web":"pnpm --filter @acme/web dev"},"dependencies":{"next":"^14.2.3"}}\n' > package.json
+printf 'services:\n    api:\n        image: x\n    db:\n        image: postgres\n' > docker-compose.yml
 printf '[project]\nname = "api"\ndependencies = ["fastapi>=0.110", "pytest"]\n' > pyproject.toml
 printf 'DATABASE_URL=postgres://u:p@h/db\nexport API_TOKEN=\n' > .env.example; printf 'API_TOKEN=livevalue123456\n' > .env; echo .env > .gitignore
 printf '# Shop\n\nStorefront for the clinic shop.\n' > README.md; echo x > src/app/page.tsx; echo x > tests/cart.test.ts
@@ -154,7 +155,8 @@ out="$(bash "$SRC/scripts/mem.sh" scan 2>&1)"; check "scan creates .memory/ and 
 cb="$(cat .memory/topics/codebase.md)"
 check "scan: package manager, framework, scripts" 'printf "%s" "$cb" | grep -q "Next.js 14.2.3" && printf "%s" "$cb" | grep -q "pnpm test" && printf "%s" "$cb" | grep -q "FastAPI"' "$cb"
 check "scan: env names only, no values" 'printf "%s" "$cb" | grep -q "DATABASE_URL, API_TOKEN" && ! grep -rqE "livevalue|postgres://" .memory' "$cb"
-check "scan: Key facts and Map filled" 'grep -q "^- Commands: .pnpm dev" .memory/index.md && grep -q "^- topics/codebase.md" .memory/index.md'
+check "scan: Key facts and Map filled" 'grep -q "^- Commands: .pnpm dev" .memory/index.md && grep -q "^- topics/codebase.md" .memory/index.md && ! grep "^- Stack:" .memory/index.md | grep -q Workspaces' "$(cat .memory/index.md)"
+check "scan: compose services with any indent" 'printf "%s" "$cb" | grep -q "services: api, db"' "$cb"
 printf -- '- Prices are in IDR.\n' >> .memory/topics/codebase.md
 awk '{ print } /^## Key facts/ { print "- Deploy: manual" }' .memory/index.md > i.tmp && grep -v '^- Commands:' i.tmp > .memory/index.md && rm i.tmp
 cp .memory/index.md idx.before; bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
@@ -163,6 +165,32 @@ rm -f idx.before
 check "scan: lint clean" 'bash "$SRC/scripts/mem.sh" lint >/dev/null' "$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
 o="$(printf '{"session_id":"%s-sc","cwd":"%s","prompt":"update readme storefront shop"}' "$RUN" "$S" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
 check "scan block not used for prompt recall" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"
+o="$(printf '{"session_id":"%s-sc","cwd":"%s","tool_input":{"file_path":"%s/acme/web/x.js"}}' "$RUN" "$S" "$S" | bash "$SRC/hooks/pm-hook.sh" pre-edit claude)"
+check "@scope text in the scan is not an @path tag" '[ "$o" = "{}" ]' "$o"
+mkdir -p "$TMP/home"; out="$(cd "$TMP/home" && HOME="$TMP/home" bash "$SRC/scripts/mem.sh" scan 2>&1)"
+check "scan refuses to create .memory/ in \$HOME" '[ ! -d "$TMP/home/.memory" ]' "$out"
+
+echo "• edge cases"
+E="$TMP/C# [x] app"; mkdir -p "$E/src/api" "$E/app/(auth)" && cd "$E" && git init -q && git config user.email t@t && git config user.name t
+cp -R "$SRC/assets/templates" .memory; mkdir -p .memory/topics
+for i in $(seq 1 16); do printf -- '- 2026-10-01 note %s about @src/\n' "$i" >> .memory/gotchas.md; done
+printf -- '- 2026-10-01 · API frozen @src/api/ #hold (user)\n- 2026-10-01 · Login frozen @app/(auth) #hold (user)\n' > .memory/topics/zz.md
+eh() { printf '{"session_id":"%s-%s","cwd":"%s","tool_input":%s}' "$RUN" "$1" "$2" "$3" | bash "$SRC/hooks/pm-hook.sh" pre-edit "$4"; }
+o="$(eh x1 "$E" "{\"file_path\":\"$E/src/api/a.js\"}" claude)"
+check "#hold with # and [ ] in the project path, after 16 other entries" 'printf "%s" "$o" | grep -q "\"ask\""' "$o"
+o="$(eh x2 "$E" "{\"file_path\":\"$E/app/(auth)/page.tsx\"}" claude)"
+check "#hold on @app/(auth) without trailing slash" 'printf "%s" "$o" | grep -q "\"ask\""' "$o"
+o="$(eh x3 "$E/src" '{"command":"*** Update File: api/a.js\n"}' codex)"
+check "codex patch path relative to a subfolder session" 'printf "%s" "$o" | grep -q "\"deny\""' "$o"
+o="$(eh x4 "$E" '{"command":"*** Update File: src/x.js\n*** Move to: src/api/x.js\n"}' codex)"
+check "codex move into a #hold area" 'printf "%s" "$o" | grep -q "\"deny\""' "$o"
+printf -- '- token: ghp_%s\n' "abcdefghijklmnopqrstuvwxyz0123456789" > ".memory/topics/c#é.md"; git add -A >/dev/null 2>&1
+check "staged secret in a file named c#é.md" '! bash "$SRC/scripts/mem.sh" secrets --staged >/dev/null 2>&1'
+git rm -q --cached ".memory/topics/c#é.md" >/dev/null 2>&1; rm -f ".memory/topics/c#é.md"
+{ printf '# Résumé\n\n'; for i in $(seq 1 80); do printf 'éé '; done; printf '\n'; } > README.md; bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
+printf -- '- 2026-10-01 deploy uses blue green rollout #deploy\n' >> .memory/gotchas.md
+o="$(printf '{"session_id":"%s-x5","cwd":"%s","prompt":"how does the deploy rollout work"}' "$RUN" "$E" | bash "$SRC/hooks/pm-hook.sh" prompt claude 2>&1)"
+check "recall works next to a scan of a long non-ASCII README" 'printf "%s" "$o" | grep -q "blue green"' "$o"
 
 echo "• monorepo"
 Q="$TMP/mono"; mkdir -p "$Q/pkg" && cd "$Q/pkg" && git init -q .. && git config user.email t@t && git config user.name t

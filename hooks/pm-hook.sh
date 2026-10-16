@@ -59,7 +59,7 @@ inject_new() {
     key="$(hash "$h")"
     grep -qx "$key" "$STATE/injected" 2>/dev/null && continue
     printf '%s\n' "$key" >> "$STATE/injected"
-    printf '%s\t%s\n' "$TODAY" "$(hash "$(printf '%s' "$h" | sed 's/^[^:]*:[0-9]*: //; s/ ↳ .*//' | head -n1 | cut -c1-60)")" >> "$STATS" 2>/dev/null
+    printf '%s\t%s\n' "$TODAY" "$(hash "$(printf '%s' "$h" | sed 's/^[^:]*:[0-9]*: //; s/ ↳ .*//' | head -n1 | LC_ALL=C cut -c1-60)")" >> "$STATS" 2>/dev/null
     out="$out$h"$'\n'
   done
   printf '%s' "$out"
@@ -92,9 +92,10 @@ $(cap "$(grep -vE '^[[:space:]]*<!--.*-->[[:space:]]*$' "$USER_MEM")" 4000)"
 --- other memory files (open when relevant; search: bash .agents/skills/project-memory/scripts/mem.sh search <words>) ---
 $files"
   # Project summary still empty (only the template comment) → ask the agent to index the project
-  if printf '%s\n' "$idx" | awk '/^## /{ on = ($0 == "## Project summary"); next }
+  # (no "## Project summary" heading at all = custom layout: do not nag)
+  if printf '%s\n' "$idx" | LC_ALL=C awk '/^## /{ on = ($0 == "## Project summary"); if (on) seen = 1; next }
       on && /^[[:space:]]*<!--/ { c = !/-->/; next } on && c { if (/-->/) c = 0; next }
-      on && /[^[:space:]]/ { full = 1 } END { exit full }'; then
+      on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }'; then
     scan="Read .memory/topics/codebase.md (generated repo scan)"
     [ -f "$MEM/topics/codebase.md" ] || scan="First run: bash .agents/skills/project-memory/scripts/mem.sh scan (indexes the repo into .memory/topics/codebase.md and fills Key facts), then read .memory/topics/codebase.md"
     ctx="$ctx
@@ -135,7 +136,7 @@ prompt)
   if [ -n "${terms// /}" ]; then
     FILES=()
     while IFS= read -r f; do FILES+=("$f"); done < <(find "$MEM" -type f -name '*.md' ! -name index.md ! -name progress.md ! -name inbox.md 2>/dev/null | sort)
-    [ "${#FILES[@]}" -gt 0 ] && hits="$(awk -v terms="$terms" -v k="${PM_RECALL_MAX:-5}" -v root="$ROOT/" '
+    [ "${#FILES[@]}" -gt 0 ] && hits="$(LC_ALL=C awk -v terms="$terms" -v k="${PM_RECALL_MAX:-5}" -v root="$ROOT/" '
       BEGIN { nt = split(terms, T, " ") }
       FNR == 1 { inc = 0; gen = 0 }
       {
@@ -177,34 +178,53 @@ $new"
   ;;
 # ---------------------------------------------------------------------------
 pre-edit)
+  # edited paths → relative to ROOT. Absolute paths may use the logical or physical (/private/…) root;
+  # relative ones (Codex apply_patch) are relative to the session cwd.
+  ROOT_P="$(cd "$ROOT" && pwd -P)"; CWD_P="$(cd "$CWD" && pwd -P)"; CWD_REL="${CWD_P#"$ROOT_P"}"; CWD_REL="${CWD_REL#/}"
+  rel_path() {   # (kept out of $(…): bash 3.2 cannot parse `case` patterns inside command substitution)
+    local p="$1"
+    case "$p" in
+      "$ROOT"/*) p="${p#"$ROOT"/}" ;;
+      "$ROOT_P"/*) p="${p#"$ROOT_P"/}" ;;
+      /*) ;;
+      *) p="${p#./}"; [ -n "$CWD_REL" ] && p="$CWD_REL/$p" ;;
+    esac
+    printf '%s\n' "$p"
+  }
   paths="$(
     { printf '%s' "$INPUT_1L" | grep -oE '"(file_path|path|notebook_path)"[[:space:]]*:[[:space:]]*"[^"]+"' | sed 's/.*:[[:space:]]*"\(.*\)"/\1/'
-      printf '%s' "$INPUT" | grep -oE '\*\*\* (Update|Add|Delete) File: [^"\\]+' | sed 's/^\*\*\* [A-Za-z]* File: //'
-    } | sed "s#^$ROOT/##; s#^\./##" | sort -u )"
+      printf '%s' "$INPUT" | grep -oE '\*\*\* ((Update|Add|Delete) File|Move to): [^"\\]+' | sed 's/^\*\*\* [A-Za-z ]*: //'
+    } | while IFS= read -r p; do rel_path "$p"; done | sort -u )"
   [ -n "$paths" ] || emit_empty
-  hits="$(
+  all_hits="$(
     find "$MEM" -type f -name '*.md' ! -name inbox.md 2>/dev/null | while IFS= read -r f; do
-      PATHS="$paths" awk -v rel="${f#"$ROOT"/}" '
+      PATHS="$paths" LC_ALL=C awk -v rel="${f#"$ROOT"/}" '
         BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); tagre = ENVIRON["PM_TAG_RE"] }
+        /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags
         { line = $0
           while (match(line, tagre)) {
-            tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:)]+$/, "", tag)
+            tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:]+$/, "", tag)
+            while (tag ~ /\)$/ && gsub(/\(/, "(", tag) < gsub(/\)/, ")", tag)) { tag = substr(tag, 1, length(tag) - 1); sub(/[.,;:]+$/, "", tag) }
             line = substr(line, RSTART + RLENGTH); t = tag; sub(/\/$/, "", t)
             for (i = 1; i <= n; i++) if (P[i] == t || index(P[i], t "/") == 1) { print rel ":" FNR ": " $0; next }
           } }' "$f"
-    done | head -n 15 )"
-  [ -n "$hits" ] || emit_empty
+    done )"
+  [ -n "$all_hits" ] || emit_empty
+  # #hold entries first so they are never cut off by the display limit
+  hits="$( { printf '%s\n' "$all_hits" | grep '#hold'; printf '%s\n' "$all_hits" | grep -v '#hold'; } | head -n 15 )"
   new="$(printf '%s\n' "$hits" | inject_new)"
   # the #hold gate applies on EVERY edit, unless the user approved each held path recently (mem.sh approve)
-  holds_all="$(printf '%s\n' "$hits" | grep '#hold')"
+  holds_all="$(printf '%s\n' "$all_hits" | grep '#hold')"
   holds="$(printf '%s\n' "$holds_all" | head -n 3)"
   if [ -n "$holds" ] && [ -f "$MEM/.approvals" ]; then
     now="$(date +%s)"
-    approved="$(PATHS="$paths" HOLDS="$holds_all" awk -F'\t' -v now="$now" '
+    approved="$(PATHS="$paths" HOLDS="$holds_all" LC_ALL=C awk -F'\t' -v now="$now" '
       BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); nh = split(ENVIRON["HOLDS"], H, "\n"); tagre = ENVIRON["PM_TAG_RE"]
         for (h = 1; h <= nh; h++) { line = H[h]
           while (match(line, tagre)) {
-            t = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", t); sub(/[.,;:)]+$/, "", t); sub(/\/$/, "", t)
+            t = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", t); sub(/[.,;:]+$/, "", t)
+            while (t ~ /\)$/ && gsub(/\(/, "(", t) < gsub(/\)/, ")", t)) { t = substr(t, 1, length(t) - 1); sub(/[.,;:]+$/, "", t) }
+            sub(/\/$/, "", t)
             line = substr(line, RSTART + RLENGTH)
             for (i = 1; i <= n; i++) if (P[i] == t || index(P[i], t "/") == 1) held[i] = 1 } } }
       $1 + 0 > now { t = $2; sub(/\/$/, "", t); for (i = 1; i <= n; i++) if (P[i] == t || index(P[i], t "/") == 1) ok[i] = 1 }

@@ -10,6 +10,7 @@
 #                               in a project without .memory/, creates it here from the templates first
 # Env: PM_STALE_DAYS (default 120), PM_SCAN_STALE (commits, default 150), PM_USER_MEMORY (default ~/.agents/memory/user.md)
 set -u
+export LC_ALL=C   # byte semantics: memory files with odd encodings never crash awk; same cut/sort as the hooks
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIG="$(pwd)"; ROOT="$ORIG"
 while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/.memory" ]; do ROOT="$(dirname "$ROOT")"; done
@@ -17,6 +18,9 @@ if [ ! -d "$ROOT/.memory" ]; then
   case "${1:-}" in
     secrets) exit 0 ;;   # nothing to scan (e.g. pre-commit after .memory/ was removed)
     scan) ROOT="$ORIG"
+      if [ "$ROOT" = "/" ] || [ "$(cd "$ROOT" && pwd -P)" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; then
+        echo "Refusing to create .memory/ in $ROOT — run mem.sh scan from the project root." >&2; exit 1
+      fi
       [ "${2:-}" = "--print" ] || { cp -R "$HERE/../assets/templates" "$ROOT/.memory" && echo "+ $ROOT/.memory/ (from templates)"; } ;;
     *) echo "No .memory/ found in this or any parent directory. New project? Run: mem.sh scan" >&2; exit 1 ;;
   esac
@@ -31,11 +35,17 @@ FILES=(); while IFS= read -r f; do FILES+=("$f"); done < <(mem_files)
 hash() { printf '%s' "$1" | cksum | cut -d' ' -f1; }
 # path argument (relative to where the user ran mem.sh, or absolute) → path relative to the repo root
 relpath() {
-  local a="$1"
+  local a="$1" slash="" rp
   case "$a" in /*) ;; *) a="$ORIG/$a" ;; esac
+  case "$a" in */) slash=/ ;; esac
+  a="$(printf '%s\n' "$a" | awk -F/ '{ n = 0
+    for (i = 1; i <= NF; i++) { if ($i == "" || $i == ".") continue; if ($i == "..") { if (n) n--; continue }; s[++n] = $i }
+    o = ""; for (i = 1; i <= n; i++) o = o "/" s[i]; print (o == "" ? "/" : o) }')$slash"
   if [ -d "$a" ]; then a="$(cd "$a" && pwd)/"
   elif [ -d "$(dirname "$a")" ]; then a="$(cd "$(dirname "$a")" && pwd)/$(basename "$a")"; fi
-  printf '%s' "${a#"$ROOT"/}"
+  rp="$(pwd -P)"   # cwd is ROOT here; also accept paths given through the physical root (/private/var/…)
+  case "$a" in "$ROOT"/*) a="${a#"$ROOT"/}" ;; "$rp"/*) a="${a#"$rp"/}" ;; esac
+  printf '%s' "$a"
 }
 # @path tag: letters, digits, _ . / - and the ( ) [ ] used by route folders such as app/[id]/ or app/(auth)/
 export PM_TAG_RE='(^|[ 	(])@[A-Za-z0-9_.]([A-Za-z0-9_./()-]|\[|\])*'
@@ -61,9 +71,13 @@ path)
   p="$(relpath "$1")"; p="${p%/}"
   awk -v p="$p" '
     BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
+    FNR == 1 { gen = 0 }
+    /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags
     { line = $0
       while (match(line, tagre)) {
-        tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:)]+$/, "", tag); sub(/\/$/, "", tag)
+        tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:]+$/, "", tag)
+        while (tag ~ /\)$/ && gsub(/\(/, "(", tag) < gsub(/\)/, ")", tag)) { tag = substr(tag, 1, length(tag) - 1); sub(/[.,;:]+$/, "", tag) }
+        sub(/\/$/, "", tag)
         line = substr(line, RSTART + RLENGTH)
         if (p == tag || index(p, tag "/") == 1 || index(tag, p "/") == 1) { print FILENAME ":" FNR ": " $0; next }
       } }' ${FILES[@]+"${FILES[@]}"} /dev/null
@@ -71,11 +85,11 @@ path)
 secrets)
   found=""
   if [ "${1:-}" = "--staged" ]; then
-    while IFS= read -r f; do
+    while IFS= read -r -d '' f; do
       case "$f" in .memory/local.md|*/.memory/local.md) continue ;; esac
-      r="$(git show ":$f" 2>/dev/null | grep -nE "$SECRET_RE" | sed "s#^#$f:#")"
+      r="$(git show ":$f" 2>/dev/null | grep -nE "$SECRET_RE" | F="$f" awk '{ print ENVIRON["F"] ":" $0 }')"
       [ -n "$r" ] && found="$found$r"$'\n'
-    done < <(git diff --cached --name-only --diff-filter=ACM -- .memory 2>/dev/null)
+    done < <(git -c core.quotePath=false diff --cached --name-only -z --diff-filter=ACM -- .memory 2>/dev/null)
   else
     found="$(grep -rnE "$SECRET_RE" .memory 2>/dev/null | grep -vE '^\.memory/(local|inbox)\.md:')"
   fi
@@ -109,12 +123,14 @@ lint)
   while IFS=$'\t' read -r loc tag; do
     [ -e "$ROOT/${tag%/}" ] || w "$loc refers to @$tag, which no longer exists → update the path or retire the entry"
   done < <(awk 'BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
-      FNR == 1 { inc = 0 }
+      FNR == 1 { inc = 0; gen = 0 }
+      /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
       /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
       /^>/ { next }
       { line = $0
       while (match(line, tagre)) {
-        tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:)]+$/, "", tag)
+        tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:]+$/, "", tag)
+        while (tag ~ /\)$/ && gsub(/\(/, "(", tag) < gsub(/\)/, ")", tag)) { tag = substr(tag, 1, length(tag) - 1); sub(/[.,;:]+$/, "", tag) }
         line = substr(line, RSTART + RLENGTH)
         if (tag ~ /\// || tag ~ /\.[a-z]+$/) print FILENAME ":" FNR "\t" tag } }' ${FILES[@]+"${FILES[@]}"} /dev/null 2>/dev/null | sort -u)
   # duplicates (e.g. after merge=union)
