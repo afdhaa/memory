@@ -57,7 +57,7 @@ for a in claude codex; do
   check "$a: memory injected" 'printf "%s" "$o" | grep -q "additionalContext"' "$o"
 done
 check "user memory injected" 'printf "%s" "$o" | grep -q "Bahasa Indonesia"' "$o"
-check "empty-template warning" 'printf "%s" "$o" | grep -q "empty template"' "$o"
+check "new-project summary prompt" 'printf "%s" "$o" | grep -q "no Project summary yet"' "$o"
 
 echo "• prompt recall & capture"
 o="$(H prompt claude "$(J s-claude ',"prompt":"tambahkan harga diskon untuk produk baru"')")"
@@ -142,6 +142,27 @@ bash "$SRC/scripts/install.sh" --remove-hooks >/dev/null 2>&1
 check "--remove-hooks cleans agent hooks" '! grep -q pm-hook.sh .claude/settings.json .codex/hooks.json'
 check "--remove-hooks cleans pre-commit" '! grep -q "project-memory" "$(git rev-parse --git-path hooks)/pre-commit" 2>/dev/null'
 check "--remove-hooks keeps other hooks and settings" 'valid_json "$(cat .claude/settings.json)" && grep -q "echo mine" .claude/settings.json && grep -q "Bash(ls)" .claude/settings.json'
+
+echo "• scan (new project)"
+S="$TMP/shop"; mkdir -p "$S/src/app" "$S/tests" && cd "$S" && git init -q && git config user.email t@t && git config user.name t
+printf '{"name":"shop","packageManager":"pnpm@9.0.0","scripts":{"dev":"next dev","test":"vitest run"},"dependencies":{"next":"^14.2.3"}}\n' > package.json
+printf '[project]\nname = "api"\ndependencies = ["fastapi>=0.110", "pytest"]\n' > pyproject.toml
+printf 'DATABASE_URL=postgres://u:p@h/db\nexport API_TOKEN=\n' > .env.example; printf 'API_TOKEN=livevalue123456\n' > .env; echo .env > .gitignore
+printf '# Shop\n\nStorefront for the clinic shop.\n' > README.md; echo x > src/app/page.tsx; echo x > tests/cart.test.ts
+git add -A && git commit -qm init
+out="$(bash "$SRC/scripts/mem.sh" scan 2>&1)"; check "scan creates .memory/ and codebase.md" '[ -f .memory/index.md ] && [ -f .memory/topics/codebase.md ]' "$out"
+cb="$(cat .memory/topics/codebase.md)"
+check "scan: package manager, framework, scripts" 'printf "%s" "$cb" | grep -q "Next.js 14.2.3" && printf "%s" "$cb" | grep -q "pnpm test" && printf "%s" "$cb" | grep -q "FastAPI"' "$cb"
+check "scan: env names only, no values" 'printf "%s" "$cb" | grep -q "DATABASE_URL, API_TOKEN" && ! grep -rqE "livevalue|postgres://" .memory' "$cb"
+check "scan: Key facts and Map filled" 'grep -q "^- Commands: .pnpm dev" .memory/index.md && grep -q "^- topics/codebase.md" .memory/index.md'
+printf -- '- Prices are in IDR.\n' >> .memory/topics/codebase.md
+awk '{ print } /^## Key facts/ { print "- Deploy: manual" }' .memory/index.md > i.tmp && grep -v '^- Commands:' i.tmp > .memory/index.md && rm i.tmp
+cp .memory/index.md idx.before; bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
+check "re-scan keeps notes and edited Key facts" 'grep -q "Prices are in IDR" .memory/topics/codebase.md && cmp -s idx.before .memory/index.md' "$(diff idx.before .memory/index.md)"
+rm -f idx.before
+check "scan: lint clean" 'bash "$SRC/scripts/mem.sh" lint >/dev/null' "$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
+o="$(printf '{"session_id":"%s-sc","cwd":"%s","prompt":"update readme storefront shop"}' "$RUN" "$S" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
+check "scan block not used for prompt recall" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"
 
 echo "• monorepo"
 Q="$TMP/mono"; mkdir -p "$Q/pkg" && cd "$Q/pkg" && git init -q .. && git config user.email t@t && git config user.name t

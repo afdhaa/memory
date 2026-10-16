@@ -91,8 +91,15 @@ $(cap "$(grep -vE '^[[:space:]]*<!--.*-->[[:space:]]*$' "$USER_MEM")" 4000)"
   [ -n "$files" ] && ctx="$ctx
 --- other memory files (open when relevant; search: bash .agents/skills/project-memory/scripts/mem.sh search <words>) ---
 $files"
-  printf '%s' "$idx" | grep -q '<!-- 3–5 lines' && ctx="$ctx
-[project-memory] index.md is still the empty template. Early in this session, fill in Project summary and Key facts from the repo (README, package files, layout) and tell the user in one line."
+  # Project summary still empty (only the template comment) → ask the agent to index the project
+  if printf '%s\n' "$idx" | awk '/^## /{ on = ($0 == "## Project summary"); next }
+      on && /^[[:space:]]*<!--/ { c = !/-->/; next } on && c { if (/-->/) c = 0; next }
+      on && /[^[:space:]]/ { full = 1 } END { exit full }'; then
+    scan="Read .memory/topics/codebase.md (generated repo scan)"
+    [ -f "$MEM/topics/codebase.md" ] || scan="First run: bash .agents/skills/project-memory/scripts/mem.sh scan (indexes the repo into .memory/topics/codebase.md and fills Key facts), then read .memory/topics/codebase.md"
+    ctx="$ctx
+[project-memory] New project memory: index.md has no Project summary yet. Early in this session: $scan and README, then write a 3–5 line Project summary in index.md (what it is, who uses it, current stage), check Key facts, and tell the user in one line."
+  fi
   if [ -f "$MEM/inbox.md" ]; then
     n="$(grep -c '^- ' "$MEM/inbox.md" 2>/dev/null)"; n="${n:-0}"
     [ "$n" -gt 0 ] && ctx="$ctx
@@ -130,9 +137,12 @@ prompt)
     while IFS= read -r f; do FILES+=("$f"); done < <(find "$MEM" -type f -name '*.md' ! -name index.md ! -name progress.md ! -name inbox.md 2>/dev/null | sort)
     [ "${#FILES[@]}" -gt 0 ] && hits="$(awk -v terms="$terms" -v k="${PM_RECALL_MAX:-5}" -v root="$ROOT/" '
       BEGIN { nt = split(terms, T, " ") }
-      FNR == 1 { inc = 0 }
+      FNR == 1 { inc = 0; gen = 0 }
       {
         line = $0
+        # generated repo scan (topics/codebase.md): reference material, too noisy for prompt recall
+        if (line ~ /^<!-- scan:start/) { gen = 1; next }
+        if (gen) { if (line ~ /^<!-- scan:end/) gen = 0; next }
         if (line ~ /^[[:space:]]*<!--/) inc = 1
         if (inc) { if (line ~ /-->/) inc = 0; next }
         if (line ~ /^[[:space:]]*$/ || line ~ /^>/ || line ~ /^#+ [^0-9]/) next

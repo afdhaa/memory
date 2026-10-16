@@ -47,7 +47,7 @@ merge_hooks() {
   local target="$1" snippet="$2" action="$3" in="/dev/null" err
   [ -f "$target" ] && in="$target"
   mkdir -p "$(dirname "$target")"
-  if err="$(awk -v action="$action" -v mark="project-memory/hooks/pm-hook.sh" -f "$SRC/scripts/hooks-json.awk" \
+  if err="$(awk -v action="$action" -v mark="project-memory/hooks/pm-hook.sh" -f "$SRC/scripts/json.awk" -f "$SRC/scripts/hooks-json.awk" \
       "$in" "$snippet" 2>&1 > "$target.tmp")"; then
     [ -f "$target" ] && cp "$target" "$target.bak"
     mv "$target.tmp" "$target"
@@ -162,8 +162,13 @@ echo "Installing $NAME v3 into: $ROOT"
 copy_skill "$ROOT/.agents/skills"
 link_skill "$ROOT/.claude/skills" "../../.agents/skills/$NAME"
 
-if [[ -d "$ROOT/.memory" ]]; then log "= .memory/ (exists, untouched)"
-else cp -R "$SRC/assets/templates" "$ROOT/.memory"; log "+ .memory/ (from templates)"; fi
+if [[ -d "$ROOT/.memory" ]]; then
+  log "= .memory/ (exists, untouched)"
+  [ -f "$ROOT/.memory/topics/codebase.md" ] || log "  tip: index this repo with: bash .agents/skills/project-memory/scripts/mem.sh scan"
+else
+  cp -R "$SRC/assets/templates" "$ROOT/.memory"; log "+ .memory/ (from templates)"
+  (cd "$ROOT" && bash .agents/skills/project-memory/scripts/mem.sh scan) | while IFS= read -r l; do log "$l"; done
+fi
 
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   for l in ".memory/local.md" ".memory/inbox.md" ".memory/.stats.tsv" ".memory/.approvals"; do
@@ -187,4 +192,4 @@ if [[ "$HOOKS" == "yes" ]]; then
 fi
 
 echo
-echo "Done. Next, open your agent here and say: \"isi .memory/index.md berdasarkan isi repo ini\""
+echo "Done. Next, open your agent here and say: \"lengkapi .memory/index.md dari hasil scan\""

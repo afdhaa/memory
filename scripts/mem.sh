@@ -6,20 +6,27 @@
 #   mem.sh secrets [--staged]   secret scan only (exit 1 if found); --staged = what git would commit
 #   mem.sh stats                entry counts per file + injection hits
 #   mem.sh approve <path> [min]  allow edits in a #hold area for N minutes (default 60) — only after the user approves
-# Env: PM_STALE_DAYS (default 120), PM_USER_MEMORY (default ~/.agents/memory/user.md)
+#   mem.sh scan [--print]       index the repo into .memory/topics/codebase.md (+ Map, empty Key facts);
+#                               in a project without .memory/, creates it here from the templates first
+# Env: PM_STALE_DAYS (default 120), PM_SCAN_STALE (commits, default 150), PM_USER_MEMORY (default ~/.agents/memory/user.md)
 set -u
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIG="$(pwd)"; ROOT="$ORIG"
 while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/.memory" ]; do ROOT="$(dirname "$ROOT")"; done
 if [ ! -d "$ROOT/.memory" ]; then
-  [ "${1:-}" = "secrets" ] && exit 0   # nothing to scan (e.g. pre-commit after .memory/ was removed)
-  echo "No .memory/ found in this or any parent directory." >&2; exit 1
+  case "${1:-}" in
+    secrets) exit 0 ;;   # nothing to scan (e.g. pre-commit after .memory/ was removed)
+    scan) ROOT="$ORIG"
+      [ "${2:-}" = "--print" ] || { cp -R "$HERE/../assets/templates" "$ROOT/.memory" && echo "+ $ROOT/.memory/ (from templates)"; } ;;
+    *) echo "No .memory/ found in this or any parent directory. New project? Run: mem.sh scan" >&2; exit 1 ;;
+  esac
 fi
 cd "$ROOT" || exit 1
 USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"
 STALE_DAYS="${PM_STALE_DAYS:-120}"
 SECRET_RE='(eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY|[Bb]earer [A-Za-z0-9._-]{20,}|(password|passwd|secret|api[_-]?key|token)[[:space:]]*[:=][[:space:]]*[^[:space:]<>\[]{8,}|([Tt]oken|TOKEN|[Bb]earer|[Kk]ey|KEY|[Ss]ecret|[Aa]uth[A-Za-z]*)[^[:alnum:]]{1,6}[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
 
-mem_files() { find .memory -type f -name '*.md' ! -name inbox.md | sort; }
+mem_files() { find .memory -type f -name '*.md' ! -name inbox.md 2>/dev/null | sort; }
 FILES=(); while IFS= read -r f; do FILES+=("$f"); done < <(mem_files)
 hash() { printf '%s' "$1" | cksum | cut -d' ' -f1; }
 # path argument (relative to where the user ran mem.sh, or absolute) → path relative to the repo root
@@ -128,6 +135,12 @@ lint)
           if (match($0, /seen: *[0-9]+/)) { s = substr($0, RSTART, RLENGTH); gsub(/[^0-9]/, "", s); seen = s + 0 }
           if (seen <= 1 && dn(t) - dn(dt) > d) print FILENAME ":" FNR "\t" $0 }' .memory/gotchas.md)
   fi
+  # repo scan out of date
+  sc="$(sed -n 's/^<!-- scan:start.* at commit \([0-9a-f]*\);.*/\1/p' .memory/topics/codebase.md 2>/dev/null | head -n1)"
+  if [ -n "$sc" ] && git rev-parse --git-dir >/dev/null 2>&1; then
+    n="$(git rev-list --count "$sc..HEAD" 2>/dev/null || echo 0)"
+    [ "$n" -gt "${PM_SCAN_STALE:-150}" ] && w ".memory/topics/codebase.md was scanned $n commits ago → run mem.sh scan"
+  fi
   # inbox waiting
   [ -f .memory/inbox.md ] && { n=$(grep -c '^- ' .memory/inbox.md); [ "$n" -gt 0 ] && w ".memory/inbox.md has $n untriaged item(s)"; }
   # git hygiene
@@ -145,11 +158,14 @@ approve)
   printf '%s\t%s\n' "$(( $(date +%s) + mins * 60 ))" "$p" >> .memory/.approvals
   echo "✓ #hold lifted for '$p' for $mins minutes (this machine only)"
   ;;
+scan)
+  SECRET_RE="$SECRET_RE" bash "$HERE/scan.sh" "$ROOT" "${1:-}"
+  ;;
 stats)
   for f in ${FILES[@]+"${FILES[@]}"}; do
     printf '%5s lines  %4s entries  %s\n' "$(wc -l < "$f" | tr -d ' ')" "$(grep -cE '^(- |[0-9]+\. |### )' "$f")" "$f"; done
   [ -f .memory/.stats.tsv ] && echo "hook injections recorded: $(wc -l < .memory/.stats.tsv | tr -d ' ') (last: $(tail -n1 .memory/.stats.tsv | cut -f1))"
   [ -f "$USER_MEM" ] && echo "user memory: $USER_MEM ($(wc -l < "$USER_MEM" | tr -d ' ') lines)"
   ;;
-*) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac
