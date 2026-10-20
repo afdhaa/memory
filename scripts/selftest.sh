@@ -162,6 +162,15 @@ awk '{ print } /^## Key facts/ { print "- Deploy: manual" }' .memory/index.md > 
 cp .memory/index.md idx.before; bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
 check "re-scan keeps notes and edited Key facts" 'grep -q "Prices are in IDR" .memory/topics/codebase.md && cmp -s idx.before .memory/index.md' "$(diff idx.before .memory/index.md)"
 rm -f idx.before
+check "scan: narrative section first, generated facts after" '[ "$(grep -c "^## How it fits together$" .memory/topics/codebase.md)" = 1 ] && [ "$(grep -n "^## How it fits together" .memory/topics/codebase.md | cut -d: -f1)" -lt "$(grep -n "^<!-- scan:start" .memory/topics/codebase.md | cut -d: -f1)" ] && grep -q "^### Stack" .memory/topics/codebase.md' "$(cat .memory/topics/codebase.md)"
+ss() { printf '{"session_id":"%s-%s","cwd":"%s","source":"startup"}' "$RUN" "$1" "$S" | bash "$SRC/hooks/pm-hook.sh" session-start claude; }
+awk '{ print } /^## Project summary/ { print "Online shop for a clinic." }' .memory/index.md > i.tmp && mv i.tmp .memory/index.md
+o="$(ss ov1)"; check "session start asks for the codebase overview while it is empty" 'printf "%s" "$o" | grep -q "no \\\\\"How it fits together\\\\\" overview yet"' "$o"
+awk '{ print } /^## How it fits together/ { print "The storefront is a Next.js app in src/app/." }' .memory/topics/codebase.md > c.tmp && mv c.tmp .memory/topics/codebase.md
+o="$(ss ov2)"; check "no overview reminder once it is written" '! printf "%s" "$o" | grep -q "overview yet"' "$o"
+{ printf '# Codebase\n\n'; sed -n '/^<!-- scan:start/,/^<!-- scan:end/p' .memory/topics/codebase.md; printf '\n## Notes\n- old note\n'; } > c.tmp && mv c.tmp .memory/topics/codebase.md
+bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
+check "older codebase.md gets the narrative section once, notes kept" '[ "$(grep -c "^## How it fits together$" .memory/topics/codebase.md)" = 1 ] && grep -q "old note" .memory/topics/codebase.md && [ "$(grep -c "^<!-- scan:start" .memory/topics/codebase.md)" = 1 ]' "$(cat .memory/topics/codebase.md)"
 check "scan: lint clean" 'bash "$SRC/scripts/mem.sh" lint >/dev/null' "$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
 o="$(printf '{"session_id":"%s-sc","cwd":"%s","prompt":"update readme storefront shop"}' "$RUN" "$S" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
 check "scan block not used for prompt recall" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"
