@@ -73,7 +73,13 @@ omp), jalankan sendiri dari root project — `.memory/` dibuat otomatis bila bel
     bash ~/tools/project-memory/scripts/mem.sh scan            # atau .agents/skills/project-memory/scripts/mem.sh
     bash ~/tools/project-memory/scripts/mem.sh scan --print    # lihat hasilnya saja, tidak menulis apa pun
 
-Yang dicatat ke `.memory/topics/codebase.md`:
+`.memory/topics/codebase.md` terdiri dari dua bagian:
+
+1. **How it fits together** — penjelasan naratif yang ditulis agent sesudah scan: bagian-bagian
+   utama kode, alur sebuah request/job dari titik masuk sampai penyimpanan, file mana yang dibaca
+   lebih dulu, dan konvensi yang tidak terlihat dari nama file. Scan tidak pernah mengubahnya.
+2. **Repository facts (generated)** — fakta hasil scan. Setiap bagian dibuka dengan satu kalimat
+   yang menjelaskan isi daftarnya:
 
 | Bagian | Isi |
 |---|---|
@@ -88,14 +94,15 @@ Yang dicatat ke `.memory/topics/codebase.md`:
 
 Scan juga menambahkan `topics/codebase.md` ke Map di `index.md` dan mengisi **Key facts** selama
 bagian itu masih kosong. Scan ulang hanya mengganti blok di antara `scan:start`/`scan:end`;
-catatan Anda di bawahnya dan Key facts yang sudah diedit tidak disentuh. `mem.sh lint` mengingatkan
+teks di luar blok dan Key facts yang sudah diedit tidak disentuh. `codebase.md` versi lama yang belum
+punya bagian "How it fits together" otomatis mendapat bagian kosong itu untuk diisi agent. `mem.sh lint` mengingatkan
 bila scan sudah tertinggal lebih dari 150 commit (`PM_SCAN_STALE`).
 
 ### Sesudah scan
 
 1. Buka agent di root project, lalu minta: **"lengkapi .memory/index.md dari hasil scan"**. Agent
-   menulis Project summary (di Claude Code & Codex, hook mengingatkannya otomatis selama ringkasan
-   masih kosong).
+   menulis Project summary dan bagian "How it fits together" di `codebase.md` (di Claude Code &
+   Codex, hook mengingatkannya otomatis selama keduanya masih kosong).
 2. Kerja seperti biasa. Agent membaca memori di awal tugas dan mencatat keputusan, koreksi
    Anda, jebakan, dan progres sebelum selesai. Setiap kali menulis, agent menutup jawabannya
    dengan satu baris seperti `📝 memory: +1 gotcha (#test), progress`.

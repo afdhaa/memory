@@ -99,7 +99,12 @@ $files"
     scan="Read .memory/topics/codebase.md (generated repo scan)"
     [ -f "$MEM/topics/codebase.md" ] || scan="First run: bash .agents/skills/project-memory/scripts/mem.sh scan (indexes the repo into .memory/topics/codebase.md and fills Key facts), then read .memory/topics/codebase.md"
     ctx="$ctx
-[project-memory] New project memory: index.md has no Project summary yet. Early in this session: $scan and README, then write a 3–5 line Project summary in index.md (what it is, who uses it, current stage), check Key facts, and tell the user in one line."
+[project-memory] New project memory: index.md has no Project summary yet. Early in this session: $scan and README, then write a 3–5 sentence Project summary in index.md (what it is, who uses it, current stage), write the \"How it fits together\" section of .memory/topics/codebase.md, check Key facts, and tell the user in one line."
+  elif [ -f "$MEM/topics/codebase.md" ] && LC_ALL=C awk '/^## /{ on = ($0 == "## How it fits together"); if (on) seen = 1; next }
+      on && /^[[:space:]]*<!--/ { c = !/-->/; next } on && c { if (/-->/) c = 0; next }
+      on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }' "$MEM/topics/codebase.md"; then
+    ctx="$ctx
+[project-memory] .memory/topics/codebase.md has no \"How it fits together\" overview yet. Early in this session, read its generated facts, the README and the main entry points, then write that section (3–6 short paragraphs in full sentences: main parts, how a request or job flows through the code, where to start reading, non-obvious conventions). Tell the user in one line."
   fi
   if [ -f "$MEM/inbox.md" ]; then
     n="$(grep -c '^- ' "$MEM/inbox.md" 2>/dev/null)"; n="${n:-0}"

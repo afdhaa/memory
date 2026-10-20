@@ -23,7 +23,7 @@ Write an entry only if it will save a future agent time or prevent a future mist
 ├── decisions.md    # Why things are the way they are. Newest first. Reversed ones kept, struck through.
 ├── gotchas.md      # Curated runbook by category, priority-sorted, max 10 per category, each with "Do instead".
 ├── topics/         # Deeper knowledge per area (auth.md, deploy.md …) — the project wiki.
-│   └── codebase.md # Generated repo scan (stack, commands, layout, config, CI) + your notes below it.
+│   └── codebase.md # "How it fits together" (written by you) + generated repo facts from `mem.sh scan`.
 ├── procedures/     # Step-by-step workflows that worked and will be repeated.
 ├── local.md        # gitignored: personal notes for this project.
 ├── inbox.md        # gitignored: user remarks auto-captured by hooks, waiting for triage.
@@ -41,18 +41,28 @@ Helper (path relative to this SKILL.md; works from anywhere inside the repo):
 - `bash scripts/mem.sh path <file>` — entries tagged for a file or folder
 - `bash scripts/mem.sh lint` — sizes, caps, secrets, map gaps, missing @paths, stale and duplicate entries
 - `bash scripts/mem.sh stats` — counts per file and hook usage
-- `bash scripts/mem.sh scan` — index the repo: writes the generated block of `topics/codebase.md`,
+- `bash scripts/mem.sh scan` — index the repo: writes the generated facts block of `topics/codebase.md`,
   adds it to the Map and fills `index.md` Key facts while empty. Never reads `.env` values.
 - `bash scripts/mem.sh approve <path> [minutes]` — lift a `#hold` temporarily, only after the user approves
 - `bash scripts/selftest.sh` — verify the installation works on this machine
 
 **New project** (no `.memory/` anywhere up the tree): from the project root run
-`bash scripts/mem.sh scan` — it creates `.memory/` from the templates and indexes the repo.
-Then read `topics/codebase.md` and the README, write the Project summary in `index.md`
-(3–5 plain sentences a newcomer understands: what the project is, who uses it, what stage it is in), correct Key facts if needed, and tell the user in one line. Do the same when
-`index.md` has no Project summary yet. Re-run the scan when lint says it is out of date or
-after big structural changes; it only rewrites its own block (between `scan:start`/`scan:end`),
-so put your own codebase notes below it.
+`bash scripts/mem.sh scan` — it creates `.memory/` from the templates and indexes the repo. Then:
+1. Read `topics/codebase.md`, the README and the main entry points.
+2. Write the Project summary in `index.md`: 3–5 plain sentences a newcomer understands (what the
+   project is, who uses it, what stage it is in). Correct Key facts if needed.
+3. Write the **"How it fits together"** section at the top of `topics/codebase.md`. The scan only
+   lists facts (stack, commands, folders); this section explains them, in 3–6 short paragraphs of
+   full sentences: what the code does and its main parts; how a typical request or job flows through
+   it (entry point → … → storage/output), naming real files and folders; where to start reading;
+   conventions or design choices that are not obvious from the file names. Write from what you read
+   in the code — never guess — and say so when something is unclear.
+4. Tell the user in one line.
+
+Do the same when `index.md` has no Project summary or `codebase.md` has an empty "How it fits
+together" yet. Re-run the scan when lint says it is out of date or after big structural changes;
+it only rewrites its own block (between `scan:start`/`scan:end`), so everything you write outside
+it stays. After a re-scan that shows structural changes, update "How it fits together" too.
 
 ## Hooks (if installed)
 
@@ -256,7 +266,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 | "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. |
 | "update memory" | Capture step for the whole session + inbox triage. |
 | "rapikan memori / clean up memory" | Full consolidation + lint, report changes. |
-| "scan project / scan ulang / index ulang" | `mem.sh scan`, then update Project summary / Key facts if the scan shows changes; report in one line. |
+| "scan project / scan ulang / index ulang" | `mem.sh scan`, then update Project summary, Key facts and "How it fits together" if the scan shows changes; report in one line. |
 | "jangan dicatat / don't save this" | Don't write it; remove it from the inbox if captured. |
 
 ## 5. Reporting
