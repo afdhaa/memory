@@ -4,12 +4,14 @@
 > Details live in the files listed in the map below.
 
 ## Project summary
-<!-- 3–5 lines: what this project is, who uses it, current stage. -->
+<!-- 3–5 plain sentences a newcomer understands: what this project does and for whom,
+     how it is built (in one sentence), and what stage it is in. -->
 
 ## Rules & preferences
-<!-- Standing rules, max ~15, most important first. One line each. Example:
+<!-- Standing rules, max ~15, most important first. One full sentence each, with the reason
+     when it is not obvious. Example:
 - Always reply in Bahasa Indonesia; code comments in English.
-- Never commit directly to main.
+- Never commit directly to main; every change goes through a pull request so CI runs first.
 -->
 
 ## Key facts

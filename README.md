@@ -1,4 +1,4 @@
-# project-memory v3.3
+# project-memory v3.4
 
 Memori berbentuk Markdown untuk coding agent: per project di `.memory/`, plus memori pribadi
 lintas project di `~/.agents/memory/user.md`. Satu skill untuk Claude Code, Codex, OpenCode,
@@ -100,6 +100,32 @@ bila scan sudah tertinggal lebih dari 150 commit (`PM_SCAN_STALE`).
    Anda, jebakan, dan progres sebelum selesai. Setiap kali menulis, agent menutup jawabannya
    dengan satu baris seperti `📝 memory: +1 gotcha (#test), progress`.
 3. Commit `.memory/` agar rekan tim dan agent lain ikut memakai memori yang sama.
+
+### Gaya penulisan memori
+
+Isi `.memory/` ditulis untuk dibaca manusia (rekan tim, reviewer PR, Anda sendiri), bukan hanya
+agent. SKILL.md mewajibkan agent menulis setiap catatan agar bisa dipahami orang yang tidak ikut
+sesi tersebut:
+
+- Judul berupa kalimat utuh yang langsung menyebut intinya, bukan singkatan atau potongan kata.
+- Selalu ada **apa**, **kenapa** (`Why:`), dan **harus bagaimana** (`Do instead:`).
+- Konkret: sebut perintah, file, angka, atau pesan error — bukan "kadang gagal".
+- Istilah domain dijelaskan saat pertama muncul; satu ide per catatan; tag di akhir baris.
+- `topics/` ditulis seperti halaman wiki singkat, `procedures/` seperti resep langkah demi langkah,
+  `progress.md` cukup jelas untuk dilanjutkan orang lain besok.
+
+Contoh:
+
+    ✗ 1. **[2026-10-14] API 429** #api (agent, seen: 1)
+         Do instead: sleep.
+
+    ✓ 1. **[2026-10-14] API supplier menolak request beruntun dengan HTTP 429** #api @src/sync/ (agent, seen: 1)
+         Why: batasnya sekitar 60 request per menit per key; upload produk massal melewatinya.
+         Do instead: beri jeda 1 detik di setiap loop create/publish (lihat syncProducts()).
+
+Label `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` tetap berbahasa Inggris karena dikenali
+hook; isinya memakai bahasa project. Minta **"rapikan memori"** untuk menulis ulang catatan lama
+yang masih kriptik.
 
 ### Perintah ke agent
 
