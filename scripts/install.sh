@@ -30,7 +30,7 @@ copy_skill() {
   mkdir -p "$dest"
   if [[ "$(cd "$SRC" && pwd -P)" == "$(cd "$dest" && pwd -P)" ]]; then log "= $dest (source)"; return; fi
   rm -rf "$dest"; mkdir -p "$dest"
-  cp -R "$SRC/SKILL.md" "$SRC/README.md" "$SRC/assets" "$SRC/scripts" "$SRC/hooks" "$dest/"
+  cp -R "$SRC/SKILL.md" "$SRC/README.md" "$SRC/assets" "$SRC/references" "$SRC/scripts" "$SRC/hooks" "$dest/"
   chmod +x "$dest"/scripts/*.sh "$dest"/hooks/*.sh 2>/dev/null || true
   log "+ $dest"
 }
@@ -67,7 +67,7 @@ This project keeps persistent memory in `.memory/` (Markdown, shared by all agen
 - For a new request, look for related memory: `bash .agents/skills/project-memory/scripts/mem.sh search <keywords>`.
 - Before editing an area: `bash .agents/skills/project-memory/scripts/mem.sh path <file>`; ask before touching anything tagged `#hold`.
 - While working: record decisions, user corrections and gotchas immediately. Before finishing: update `.memory/progress.md`.
-- Write memory in English (unless `.memory/index.md` sets another `Memory language:`), in plain, specific sentences without filler — see the skill's Writing style and Anti-slop rules.
+- Write memory in English (unless `.memory/index.md` sets another `Memory language:`), in plain, specific sentences without filler — see the skill's references/writing.md.
 - Never write secrets into memory.
 <!-- project-memory:end -->
 MD

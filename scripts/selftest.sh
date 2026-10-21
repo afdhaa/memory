@@ -25,7 +25,7 @@ mkdir -p .claude && printf '{"permissions":{"allow":["Bash(ls)"]},"hooks":{"Stop
 
 echo "• install"
 out="$(bash "$SRC/scripts/install.sh" 2>&1)"; check "installer exits cleanly" '[ $? -eq 0 ]' "$out"
-for f in .agents/skills/project-memory/SKILL.md .claude/skills/project-memory/SKILL.md .memory/index.md AGENTS.md CLAUDE.md .claude/settings.json .codex/hooks.json .gitattributes "$PM_USER_MEMORY"; do
+for f in .agents/skills/project-memory/SKILL.md .agents/skills/project-memory/references/writing.md .claude/skills/project-memory/SKILL.md .memory/index.md AGENTS.md CLAUDE.md .claude/settings.json .codex/hooks.json .gitattributes "$PM_USER_MEMORY"; do
   check "exists: ${f#$TMP/}" "[ -e \"$f\" ]"; done
 bash "$SRC/scripts/install.sh" >/dev/null 2>&1
 check "re-install does not duplicate hooks" '[ "$(grep -c pm-hook.sh .claude/settings.json)" = 4 ] && [ "$(grep -c pm-hook.sh .codex/hooks.json)" = 4 ]'

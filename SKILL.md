@@ -2,7 +2,7 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "review memory", "cek memori", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.7.0
+  version: 3.7.1
 ---
 
 # Project Memory (v3.7)
@@ -123,7 +123,7 @@ ask once. Never copy project secrets, names of private systems or client data in
 
 `inbox.md` holds raw user remarks captured by the prompt hook (secrets redacted). For each
 item: if durable, record it in the right place (table above), rewritten as a clear,
-self-contained entry (see *Writing style*) — never paste the raw remark. If it is already
+self-contained entry (see *Writing*) — never paste the raw remark. If it is already
 recorded, a one-off, or not a correction, drop it. Then delete the triaged items (empty the file). Report in one line, e.g. `📝 inbox: 2 recorded, 3 dropped`.
 
 ### The filter
@@ -135,90 +135,39 @@ connection strings, personal data) — write *where* they live (`.env` → `KP_B
 never the value. If you find one in memory, delete it and tell the user to rotate it.
 A git pre-commit check blocks commits that put secrets into `.memory/`.
 
-### Writing style — write for a teammate, not for a parser
+### Writing — for a teammate, not for a parser
 
-Memory is read by people (teammates reviewing `.memory/` in a PR, the user checking what you
-know) as much as by agents. An entry that only its author can decode is worthless next month.
-Every entry must make sense to someone who was **not** in this session and does not know the code yet.
+People read `.memory/` too (PR reviews, the user checking what you know). **Before you write or
+rewrite memory for the first time in a session, read `references/writing.md`** (relative to this
+SKILL.md): it has the full rules, good/bad examples, and templates for topics, procedures and progress.
+The short version:
 
-1. **Lead with the point, in plain words.** The bold title is a complete statement a reader can act
-   on: "Integration tests hang unless the database container is running", not "int tests hang (db)".
-2. **Say what, why, and what to do.** What happens or was decided → why (cause, constraint, who asked)
-   → what to do instead. The reason is what lets a future reader judge whether the entry still holds.
-3. **Full sentences, no private shorthand.** No telegraphic fragments ("db flaky, retry"), no
-   abbreviations you invented, no arrows or symbols in place of verbs. Explain a domain term or a
-   code name the first time it appears in a file ("`netPrice` — the price after discount").
-4. **Concrete over vague.** Name the command, file, endpoint, number or error message
-   ("`HTTP 429` after ~60 requests/minute"), not "sometimes fails" or "be careful with the API".
-5. **One idea per entry, short.** A title plus 1–3 short lines. If it needs more, it belongs in
-   `topics/<area>.md`, with a one-line pointer entry.
-6. **Tags go at the end** of the title line, after the sentence — they are for search, not for reading.
-   When the user talks in another language than the memory language, **always** add the words they
-   used as tags too (user said "upload produk" → `#upload #produk`), or prompt recall will miss the entry.
-7. **No session narration.** Not "I tried X, then Y, then found…" — write the conclusion that
-   remains true after the session.
+1. The bold title is a complete sentence that states the point a reader can act on.
+2. Say what happens or was decided, why (`Why:`), and what to do (`Do instead:`).
+3. Full sentences; no private shorthand, invented abbreviations or arrows instead of verbs.
+   Explain a domain term the first time it appears in a file.
+4. Concrete: the command, file, number or error message — never "sometimes fails".
+5. One idea per entry: a title plus 1–3 short lines; longer material goes to `topics/<area>.md`.
+6. Tags at the end of the title line. When the user talks in another language than the memory
+   language, **always** add their own words as tags (said "upload produk" → `#upload #produk`).
+7. Write the conclusion that stays true, not the story of the session.
 
-### Language — English by default
+**Language: English by default**, whatever language the chat is in. A `Memory language: <language>`
+line in `index.md` Rules (project) or `user.md` (all projects) overrides it; change it only when the
+user asks. Keep UI text, error messages and business terms verbatim, quoted, then explained. The
+labels `Why:`, `Do instead:`, `Rejected:`, `Revisit if:` stay in English — the hooks recognise them.
 
-Write all memory files in **English**, whatever language the conversation is in, so every
-teammate and every agent can read them. Exceptions:
-- **Override:** if `index.md` Rules (this project) or `user.md` (all projects) contains a line
-  `Memory language: <language>`, write memory in that language instead. Add or change that line
-  only when the user asks. The field labels `Why:`, `Do instead:`, `Rejected:`, `Revisit if:` stay
-  in English in every language — the hooks recognise them.
-- **Keep verbatim** what must match reality: UI text, error messages, domain terms the business
-  uses, identifiers. Quote them and explain them in English: `the "Simpan Draf" (Save draft) button`.
-- **Recall across languages:** the hooks match memory against the user's words. When the user
-  works in another language, add their key terms as tags so the entry is still found:
-  `**[2026-10-14] Net price excludes the platform fee** #pricing #harga @src/pricing/`.
-- Translate inbox remarks and user corrections into English when you record them; keep the
-  original wording only when the exact phrase matters.
+**Anti-slop.** Every word must carry information. No filler ("It is important to note", "In order
+to"), no marketing words (robust, seamless, comprehensive, leverage), no vague quantities ("various",
+"several"), no restating the title, no emoji or padding structure, no assistant voice ("I", "Great
+news"), no guess written as a fact. `mem.sh lint` flags the common words.
 
-### Anti-slop — no filler, no generated-sounding prose
-
-Memory is read under time pressure. Every word must carry information. Before saving, delete
-anything a reader would skim past. `mem.sh lint` flags the common offenders.
-
-Do not write:
-- **Filler and throat-clearing:** "It is important to note that", "It's worth mentioning",
-  "In order to", "As mentioned above", "Overall,", "In summary", "Basically".
-- **Inflated or marketing words:** robust, seamless, comprehensive, powerful, cutting-edge,
-  leverage, utilize, delve, streamline, crucial, vital, pivotal, holistic, best practices,
-  "plays a key role". Say what the thing does: "retries 3 times", not "robust error handling".
-- **Vague quantities and hedges:** "various", "several", "some issues", "might potentially",
-  "should probably work". Give the number, the name, or say plainly that it is unknown.
-- **Restating:** a `Why:` that repeats the title, a summary sentence that repeats the list above it.
-- **Padding structure:** bullet lists for a single point, bold on half the words, emoji, headings
-  over one line of text, invented lists of three when there are two real items.
-- **Assistant voice and narration:** "I", "we successfully", "Great news", "Let me know", "as an AI",
-  "Now the tests pass!". Memory states facts; it is not a message to anyone.
-- **Unverified claims:** never record a guess as a fact. If it is a hypothesis, write
-  "Unconfirmed:" and what would confirm it — or do not record it.
-
-Test: read the entry aloud. If a senior engineer would cut a word, cut it. If a sentence would be
-true of any project ("Follow best practices for security"), it carries no information — delete it.
-
-Before saving, reread the entry as a newcomer: *"Do I understand what this means and what to
-do, without opening the code or the chat?"* If not, rewrite it.
-
-✗ Hard to read — only the author knows what it means:
-```
-1. **[2026-10-14] API 429** #api (agent, seen: 1)
-   Do instead: sleep.
-- 2026-10-14 · legacy auth stays (mob v2) #auth
-```
-✓ Readable — a newcomer knows what happens, why, and what to do:
-```
-1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api #produk @src/sync/ (agent, seen: 1)
-   Why: it allows about 60 requests per minute per key; bulk product uploads exceeded that.
-   Do instead: wait 1 second between requests in every create/publish loop (see syncProducts()).
-- 2026-10-14 · Keep the legacy auth module for now, because the mobile app v2 still logs in through /v1/login. #auth @src/auth/legacy/ #hold (user)
-```
+Check before saving: *"Would a newcomer understand what this means and what to do, without opening
+the code or the chat?"* If not, rewrite it.
 
 ### Entry formats
 
-**Gotcha** (curated runbook entry — must be actionable): a title that states the problem or rule,
-an optional `Why:` with the cause, and a `Do instead:` with the concrete fix.
+**Gotcha** — title states the problem or rule; `Why:` gives the cause; `Do instead:` the fix:
 ```
 1. **[2026-10-14] Integration tests hang unless the database container is running** #test @tests/integration/ (agent, seen: 2)
    Why: the tests connect to Postgres on localhost:5432 and wait forever instead of failing.
@@ -236,37 +185,7 @@ Rejected: Redis — needs a running service; JSON files — slow and unsafe with
 Revisit if: we add multi-user sync.
 ```
 
-**Topic file** (`topics/<area>.md`) — a short wiki page, not a pile of bullets:
-```
-# Pricing
-
-## Overview
-Two or three sentences: what this area does, who/what depends on it, where the code lives.
-
-## How it works
-Short paragraphs or numbered steps describing the flow, naming the key files and functions.
-
-## Rules and pitfalls
-- Full-sentence rules, each with its reason.
-```
-
-**Procedure** (`procedures/<name>.md`) — a recipe someone can follow without help:
-```
-# Release a new version
-
-**When:** every production release. **Takes:** ~10 minutes. **Needs:** push access to main.
-
-1. Update `CHANGELOG.md` — one line per user-visible change.
-2. Run `npm run release -- patch`; it bumps the version and creates the tag.
-3. ...
-
-**Check it worked:** the GitHub Actions "deploy" job is green and /health shows the new version.
-**If it fails:** ...
-```
-
-**Progress** (`progress.md`) — rewritten at the end of every task so that someone picking up the
-work tomorrow knows where things stand: per item, one sentence on *what* and *why it matters*,
-plus the next concrete step or what it is waiting on (and who).
+Topic files, procedures and `progress.md` follow the templates in `references/writing.md`.
 
 Tags:
 - `#topic` — lowercase, consistent; also improves prompt recall (tag matches rank higher).
@@ -320,7 +239,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 3. **Stale?** (old, seen once, never surfaced by hooks recently) → verify against the code;
    update, confirm (refresh date), or remove. Ask the user if unsure.
 4. Fold related entries into `topics/<area>.md`; promote recurring lessons; demote outdated rules.
-   Rewrite cryptic, telegraphic or padded entries so they follow *Writing style* and *Anti-slop*,
+   Rewrite cryptic, telegraphic or padded entries so they follow *Writing* and `references/writing.md`,
    and translate entries to the memory language (English unless overridden).
 5. Go through `mem.sh review`: confirm what still holds in the code, remove what does not.
 6. Refresh the map in `index.md`; empty `inbox.md`; re-run lint until clean. Report changes.

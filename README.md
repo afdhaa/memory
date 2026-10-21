@@ -1,4 +1,4 @@
-# project-memory v3.7
+# project-memory v3.7.1
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -59,12 +59,57 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 89 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs 90 automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).
 
 ## 2. Getting started
+
+### Memory structure
+
+The installer (or the first `mem.sh scan`) adds this to your project. Everything in `.memory/` is
+plain Markdown that you can read, edit and review in pull requests.
+
+```
+your-project/
+├── .memory/                    # project memory — committed, shared by the team and every agent
+│   ├── README.md               # explains these files to teammates (documentation, not memory)
+│   ├── index.md                # read at the start of every task: summary, rules, key facts, map
+│   ├── progress.md             # what is in progress, next, blocked — rewritten after each task
+│   ├── decisions.md            # why things are the way they are, with rejected alternatives
+│   ├── gotchas.md              # surprises and corrections, each with "Do instead"
+│   ├── topics/
+│   │   ├── codebase.md         # how the code fits together, project layout, generated scan facts
+│   │   └── <area>.md           # deeper notes per area (auth, billing, deploy…), added over time
+│   ├── procedures/
+│   │   └── <name>.md           # step-by-step workflows that repeat (release, migration…)
+│   ├── local.md                # personal notes for this project      — gitignored
+│   ├── inbox.md                # remarks captured from chat, to triage — gitignored
+│   └── .stats.tsv              # which entries the hooks surfaced      — gitignored
+├── .agents/skills/project-memory/   # the skill itself (SKILL.md, references/, scripts/, hooks/)
+├── .claude/skills/project-memory    # symlink to the skill, for Claude Code
+├── .claude/settings.json       # Claude Code hooks
+├── .codex/hooks.json           # Codex hooks
+├── AGENTS.md, CLAUDE.md        # a short instruction block for agents
+└── .gitattributes, .gitignore  # merge=union for decisions/gotchas, personal files kept out of git
+
+~/.agents/memory/user.md        # your personal preferences for every project (not in the repo)
+```
+
+What an entry looks like:
+
+```
+1. **[2026-10-21] The supplier API answers bulk product uploads with "429 Too Many Requests"** #supplier #produk @src/services/supplier.js (agent, seen: 1, unconfirmed)
+   Why: publishAll() sent one POST right after another; the supplier's exact rate limit is not documented.
+   Do instead: keep the pause between requests in publishAll() and retry a 429 after its Retry-After delay.
+```
+
+- **Title**: the point in one sentence, dated.
+- **`#tags`**: help search; **`@path`**: shows the entry before an agent edits that code.
+- **`(user|agent, seen: N)`**: who it came from and how often it came up; `unconfirmed` marks an
+  agent's conclusion that nobody has checked yet.
+- **`Why:` / `Do instead:`**: the cause and the concrete fix.
 
 ### Scan a new project
 
@@ -123,7 +168,7 @@ language, add this line to the Rules in `index.md` (or to `user.md` for all proj
 
     - Memory language: Indonesian
 
-**Writing rules** (full version in SKILL.md, sections *Writing style* and *Anti-slop*):
+**Writing rules** (short version in SKILL.md, full guide with examples in `references/writing.md`):
 
 - The title is a complete sentence that states the point, not an abbreviation or a fragment.
 - Every entry says **what** happens, **why** (`Why:`) and **what to do** (`Do instead:`).
