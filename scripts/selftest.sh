@@ -23,6 +23,16 @@ git init -q && git config user.email t@t && git config user.name t
 echo "x" > src/app.js; echo "x" > src/api/client.js; echo "logs/" > .gitignore
 mkdir -p .claude && printf '{"permissions":{"allow":["Bash(ls)"]},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}\n' > .claude/settings.json
 
+
+echo "• package"
+skv="$(sed -n 's/^  version: *//p' "$SRC/SKILL.md" | head -n1)"
+if [ -f "$SRC/package.json" ]; then
+  pkv="$(awk -F'"' '/"version"/ { print $4; exit }' "$SRC/package.json")"
+  check "package.json version matches SKILL.md ($skv)" '[ "$pkv" = "$skv" ]' "package.json: $pkv"
+  mkdir -p "$TMP/nm/.bin" && ln -s "$SRC/scripts/cli.sh" "$TMP/nm/.bin/team-memory"
+  o="$("$TMP/nm/.bin/team-memory" --version 2>&1)"; check "npm bin works through a symlink" '[ "$o" = "$skv" ]' "$o"
+fi
+
 echo "• install"
 out="$(bash "$SRC/scripts/install.sh" 2>&1)"; check "installer exits cleanly" '[ $? -eq 0 ]' "$out"
 for f in .agents/skills/project-memory/SKILL.md .agents/skills/project-memory/references/writing.md .claude/skills/project-memory/SKILL.md .memory/index.md AGENTS.md CLAUDE.md .claude/settings.json .codex/hooks.json .gitattributes "$PM_USER_MEMORY"; do

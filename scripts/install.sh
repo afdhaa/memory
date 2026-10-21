@@ -195,4 +195,4 @@ if [[ "$HOOKS" == "yes" ]]; then
 fi
 
 echo
-echo "Done. Next, open your agent here and say: \"lengkapi .memory/index.md dari hasil scan\""
+echo "Done. Next, open your agent here and say: \"complete .memory/index.md from the scan\""

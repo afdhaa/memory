@@ -1,4 +1,4 @@
-# project-memory v3.8
+# project-memory v3.8.1
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -321,3 +321,7 @@ skills.omp.sh (the version comes from `metadata.version` in SKILL.md):
 - `.gitattributes` sets `merge=union` for `decisions.md` and `gotchas.md`: additions from two branches merge without conflicts (lint flags duplicates).
 - The pre-commit hook rejects commits that put tokens or passwords into `.memory/`.
 - `inbox.md`, `local.md` and `.stats.tsv` are not committed.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Release history: [CHANGELOG.md](CHANGELOG.md).
