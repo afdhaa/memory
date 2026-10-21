@@ -21,6 +21,10 @@ and is plain Markdown: read it, review it in pull requests, and edit it like any
 - Memory is written in English unless `index.md` sets another `Memory language:`.
 - Entries are dated (`[YYYY-MM-DD]`) and end with tags: `#topic` for search, `@path/` for the code
   they apply to. Agents see `@path` entries before they edit that code.
+- `(user, …)` entries come from a person; `(agent, …, unconfirmed)` entries are an agent's own
+  conclusion that nobody has checked yet. Agents verify them before relying on them. To confirm
+  one, delete `, unconfirmed` (for example while reviewing a pull request); if it is wrong, fix or
+  delete the entry. `mem.sh review` lists them.
 - `#hold` on a decision freezes its `@path`: agents must ask before changing anything there.
 - Reversed decisions are struck through (`~~…~~ superseded …`), never deleted.
 - Never write secrets here. Write where a secret lives (`.env` → `API_KEY`), not its value. A
@@ -29,5 +33,6 @@ and is plain Markdown: read it, review it in pull requests, and edit it like any
 ## Useful commands
 
     bash .agents/skills/project-memory/scripts/mem.sh search <words>   # find entries
+    bash .agents/skills/project-memory/scripts/mem.sh review           # unconfirmed agent entries to check
     bash .agents/skills/project-memory/scripts/mem.sh lint             # check size, secrets, stale entries, filler wording
     bash .agents/skills/project-memory/scripts/mem.sh scan             # refresh the generated facts in topics/codebase.md

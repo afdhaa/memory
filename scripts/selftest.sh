@@ -180,6 +180,16 @@ sed '$d' .memory/gotchas.md | sed '$d' > g.tmp && mv g.tmp .memory/gotchas.md
 check "bootstrap asks for English memory" 'grep -q "Write memory in English" "$P/AGENTS.md"' "$(cat "$P/AGENTS.md")"
 check "scan: nested layout with subfolders" 'grep -q "^  - .src/app/. — 1 files" .memory/topics/codebase.md' "$(cat .memory/topics/codebase.md)"
 check ".memory/README.md created, not used as memory" '[ -f .memory/README.md ] && ! bash "$SRC/scripts/mem.sh" search pull requests reviewed | grep -q README' "$(bash "$SRC/scripts/mem.sh" search pull requests reviewed)"
+printf '1. **[2020-01-01] Old unconfirmed cache lesson** #cache (agent, seen: 1, unconfirmed)\n   Do instead: clear the cache.\n1. **[%s] Fresh unconfirmed queue lesson** #queue @src/app/ (agent, seen: 1, unconfirmed)\n   Do instead: drain the queue.\n' "$(date +%Y-%m-%d)" >> .memory/gotchas.md
+o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"
+check "review lists unconfirmed entries, oldest first" 'printf "%s" "$o" | grep -q "Old unconfirmed" && [ "$(printf "%s\n" "$o" | grep -n "Old unconfirmed" | cut -d: -f1)" -lt "$(printf "%s\n" "$o" | grep -n "Fresh unconfirmed" | cut -d: -f1)" ]' "$o"
+o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
+check "lint flags only old unconfirmed entries, counts all" 'printf "%s" "$o" | grep -q "unconfirmed for .* days" && [ "$(printf "%s" "$o" | grep -c "unconfirmed for")" = 1 ] && printf "%s" "$o" | grep -q "2 unconfirmed agent entries"' "$o"
+o="$(printf '{"session_id":"%s-uc","cwd":"%s","tool_input":{"file_path":"%s/src/app/page.tsx"}}' "$RUN" "$S" "$S" | bash "$SRC/hooks/pm-hook.sh" pre-edit claude)"
+check "pre-edit injection warns that unconfirmed entries need checking" 'printf "%s" "$o" | grep -q "check them against the code"' "$o"
+rm -f .memory/.stats.tsv
+sed '$d' .memory/gotchas.md | sed '$d' | sed '$d' | sed '$d' > g.tmp && mv g.tmp .memory/gotchas.md
+o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"; check "review is quiet when everything is confirmed" '[ "$o" = "✓ no unconfirmed entries" ]' "$o"
 check "scan: lint clean" 'bash "$SRC/scripts/mem.sh" lint >/dev/null' "$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
 o="$(printf '{"session_id":"%s-sc","cwd":"%s","prompt":"update readme storefront shop"}' "$RUN" "$S" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
 check "scan block not used for prompt recall" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"

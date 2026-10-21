@@ -7,6 +7,8 @@
 > `1. **[YYYY-MM-DD] What goes wrong or what the rule is, in one sentence** #tag @path/ (user|agent, seen: N)`
 > `   Why: the cause or the reason behind the rule.`
 > `   Do instead: the concrete action — command, file, value.`
+> An agent's own conclusion is marked `(agent, seen: 1, unconfirmed)` until the user confirms it,
+> it comes up again, or it is verified; then `, unconfirmed` is removed.
 > Rename or add sections to fit the project.
 
 ## User directives

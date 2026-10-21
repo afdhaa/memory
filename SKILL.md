@@ -1,11 +1,11 @@
 ---
 name: project-memory
-description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
+description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "review memory", "cek memori", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.6.0
+  version: 3.7.0
 ---
 
-# Project Memory (v3.6)
+# Project Memory (v3.7)
 
 Every coding agent working in this repo shares one long-term memory, kept as Markdown.
 No server, no database: the files are the memory, `scripts/mem.sh` and `grep` are the
@@ -41,6 +41,7 @@ Helper (path relative to this SKILL.md; works from anywhere inside the repo):
 - `bash scripts/mem.sh search <words…>` — ranked search (project memory + user memory)
 - `bash scripts/mem.sh path <file>` — entries tagged for a file or folder
 - `bash scripts/mem.sh lint` — sizes, caps, secrets, map gaps, missing @paths, stale and duplicate entries, filler words
+- `bash scripts/mem.sh review` — unconfirmed agent entries waiting for the user, oldest first
 - `bash scripts/mem.sh stats` — counts per file and hook usage
 - `bash scripts/mem.sh scan` — index the repo: writes the generated facts block of `topics/codebase.md`,
   adds it to the Map and fills `index.md` Key facts while empty. Never reads `.env` values.
@@ -98,6 +99,8 @@ Without hooks (OpenCode, Antigravity, or `PM_HOOKS=off`), do all of the below yo
    decision beats your assumption; if you think it is outdated, ask — don't silently override it.
 4. If an entry for the area is tagged `#hold`, ask the user before changing anything there
    (without hooks, too). If they approve, `mem.sh approve <path>` records it for 60 minutes.
+5. An entry marked `unconfirmed` is a lead, not a fact: check it against the code before you rely
+   on it. If it holds, confirm it; if it is wrong, correct or remove it (see *Confidence*).
 
 ## 2. Capture
 
@@ -271,7 +274,8 @@ Tags:
   an entry is about specific code: it makes the entry appear before edits there, and lets
   lint flag it when that code is moved or deleted. Be specific (`@src/auth/` not `@src/`).
 - `#hold` — freezes the tagged path: agents must ask before editing. Only when the user asks.
-- `(user|agent, seen: N)` — source and how many times this came up.
+- `(user|agent, seen: N)` — source and how many times this came up. Agent entries add
+  `, unconfirmed` until confirmed: `(agent, seen: 1, unconfirmed)` (see *Confidence*).
 
 ### Recurrence and promotion
 
@@ -281,6 +285,28 @@ Tags:
   promote to `index.md` Rules only at `seen: 3`+ or when the user confirms it is project-wide.
 - Changed facts: edit in place, note `(updated YYYY-MM-DD, was: …)`.
 - Reversed decisions: never delete — `~~old~~ superseded YYYY-MM-DD → see …`.
+
+### Confidence — unconfirmed agent entries
+
+What the user said is true by definition; what you concluded may be wrong. So a gotcha or decision
+that comes from **your own** conclusion — not from the user — starts as unconfirmed:
+`(agent, seen: 1, unconfirmed)`. User entries `(user, …)` are confirmed from the start.
+
+- **Use, but verify.** Unconfirmed entries are still recalled and injected. Treat one as a lead:
+  check it against the code before relying on it, and fix or delete it when it is wrong.
+- **Confirm** by removing `, unconfirmed` when one of these happens:
+  1. the user approves it (in chat, or in a PR review of `.memory/`);
+  2. it comes up again in a later session — increment `seen` to 2 and drop the marker;
+  3. you verified it with evidence in this session (a test, a command's output, the code itself) —
+     say what in the entry: `Why: … (verified: npm test fails without it)`.
+  Ways 2 and 3 confirm **facts** (gotchas, notes). A **decision you made yourself** (a design or
+  library choice) stays unconfirmed until the user approves it: checking that the code matches the
+  entry proves the entry is accurate, not that the user agrees with the choice.
+- **Never promote** an unconfirmed entry to `index.md` Rules, and never add `#hold` to one.
+- **Report** new unconfirmed entries in your reporting line so the user can veto them:
+  `📝 memory: +1 gotcha (unconfirmed: supplier 429)`.
+- `mem.sh review` lists unconfirmed entries with their age; `mem.sh lint` flags those older than
+  30 days (`PM_UNCONFIRMED_DAYS`) — confirm them, or remove them if they no longer hold.
 
 ## 3. Curate (keep it small and true)
 
@@ -296,7 +322,8 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 4. Fold related entries into `topics/<area>.md`; promote recurring lessons; demote outdated rules.
    Rewrite cryptic, telegraphic or padded entries so they follow *Writing style* and *Anti-slop*,
    and translate entries to the memory language (English unless overridden).
-5. Refresh the map in `index.md`; empty `inbox.md`; re-run lint until clean. Report changes.
+5. Go through `mem.sh review`: confirm what still holds in the code, remove what does not.
+6. Refresh the map in `index.md`; empty `inbox.md`; re-run lint until clean. Report changes.
 
 ## 4. User commands
 
@@ -308,6 +335,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 | "what do you know about X / apa yang kamu tahu soal X" | `mem.sh search X`, summarise with file references. |
 | "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. |
 | "update memory" | Capture step for the whole session + inbox triage. |
+| "review memory / cek memori" | `mem.sh review`; show each unconfirmed entry in one plain line and ask: keep, fix or drop. Apply the answers. |
 | "rapikan memori / clean up memory" | Full consolidation + lint, report changes. |
 | "scan project / scan ulang / index ulang" | `mem.sh scan`, then update Project summary, Key facts, "How it fits together" and "Project layout" if the scan shows changes; report in one line. |
 | "jangan dicatat / don't save this" | Don't write it; remove it from the inbox if captured. |

@@ -4,11 +4,12 @@
 #   mem.sh path <file-or-dir>   entries tagged @path that apply to it
 #   mem.sh lint                 size, caps, secrets, map, missing @paths, stale & duplicate entries, filler wording
 #   mem.sh secrets [--staged]   secret scan only (exit 1 if found); --staged = what git would commit
+#   mem.sh review               unconfirmed agent entries, oldest first (confirm or remove them with the user)
 #   mem.sh stats                entry counts per file + injection hits
 #   mem.sh approve <path> [min]  allow edits in a #hold area for N minutes (default 60) — only after the user approves
 #   mem.sh scan [--print]       index the repo into .memory/topics/codebase.md (+ Map, empty Key facts);
 #                               in a project without .memory/, creates it here from the templates first
-# Env: PM_STALE_DAYS (default 120), PM_SCAN_STALE (commits, default 150), PM_USER_MEMORY (default ~/.agents/memory/user.md)
+# Env: PM_STALE_DAYS (default 120), PM_UNCONFIRMED_DAYS (default 30), PM_SCAN_STALE (commits, default 150), PM_USER_MEMORY (default ~/.agents/memory/user.md)
 set -u
 export LC_ALL=C   # byte semantics: memory files with odd encodings never crash awk; same cut/sort as the hooks
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +29,19 @@ fi
 cd "$ROOT" || exit 1
 USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"
 STALE_DAYS="${PM_STALE_DAYS:-120}"
+UNCONF_DAYS="${PM_UNCONFIRMED_DAYS:-30}"
+# unconfirmed <today>: "<age days>\t<file>:<line>\t<entry>" for every "(agent, …, unconfirmed)" entry, oldest first
+unconfirmed() {
+  awk -v t="$1" '
+    function dn(s,  y,m,dd){ y=substr(s,1,4)+0; m=substr(s,6,2)+0; dd=substr(s,9,2)+0; if(m<3){y--;m+=12}; return 365*y+int(y/4)-int(y/100)+int(y/400)+int((153*(m-3)+2)/5)+dd }
+    FNR == 1 { inc = 0; gen = 0 }
+    /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
+    /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
+    /^>/ || /~~/ { next }
+    /[(,][[:space:]]*unconfirmed[[:space:]]*\)/ {
+      age = -1; if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) age = dn(t) - dn(substr($0, RSTART, 10))
+      print age "\t" FILENAME ":" FNR "\t" $0 }' ${FILES[@]+"${FILES[@]}"} /dev/null | sort -t"$(printf '\t')" -k1,1nr
+}
 SECRET_RE='(eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY|[Bb]earer [A-Za-z0-9._-]{20,}|(password|passwd|secret|api[_-]?key|token)[[:space:]]*[:=][[:space:]]*[^[:space:]<>\[]{8,}|([Tt]oken|TOKEN|[Bb]earer|[Kk]ey|KEY|[Ss]ecret|[Aa]uth[A-Za-z]*)[^[:alnum:]]{1,6}[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
 
 mem_files() { find .memory -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | sort; }   # README.md = docs, not memory
@@ -164,6 +178,14 @@ lint)
           if (match($0, /seen: *[0-9]+/)) { s = substr($0, RSTART, RLENGTH); gsub(/[^0-9]/, "", s); seen = s + 0 }
           if (seen <= 1 && dn(t) - dn(dt) > d) print FILENAME ":" FNR "\t" $0 }' .memory/gotchas.md)
   fi
+  # unconfirmed agent entries: count (info) + old ones (issue)
+  uc="$(unconfirmed "$today")"
+  if [ -n "$uc" ]; then
+    printf '%s\n' "$uc" | awk -F'\t' -v d="$UNCONF_DAYS" '$1 > d' | head -n 10 | while IFS=$'\t' read -r age loc text; do
+      echo "⚠ unconfirmed for $age days: $loc → check it against the code with the user; confirm it or remove it"; done
+    old="$(printf '%s\n' "$uc" | awk -F'\t' -v d="$UNCONF_DAYS" '$1 > d' | grep -c .)"; issues=$((issues + old))
+    echo "ℹ $(printf '%s\n' "$uc" | grep -c .) unconfirmed agent entr$( [ "$(printf '%s\n' "$uc" | grep -c .)" = 1 ] && echo y || echo ies) (mem.sh review)"
+  fi
   # repo scan out of date
   sc="$(sed -n 's/^<!-- scan:start.* at commit \([0-9a-f]*\);.*/\1/p' .memory/topics/codebase.md 2>/dev/null | head -n1)"
   if [ -n "$sc" ] && git rev-parse --git-dir >/dev/null 2>&1; then
@@ -179,6 +201,15 @@ lint)
   fi
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
   [ "$issues" -eq 0 ]
+  ;;
+review)
+  uc="$(unconfirmed "$(date +%Y-%m-%d)")"
+  if [ -z "$uc" ]; then echo "✓ no unconfirmed entries"; exit 0; fi
+  echo "Unconfirmed agent entries (oldest first). For each: keep (remove \", unconfirmed\"), fix, or delete."
+  printf '%s\n' "$uc" | while IFS=$'\t' read -r age loc text; do
+    [ "$age" -ge 0 ] 2>/dev/null && a="${age}d" || a="no date"
+    printf '\n%s (%s)\n  %s\n' "$loc" "$a" "$(printf '%s' "$text" | sed 's/^[0-9]*\. //; s/^- //' | cut -c1-200)"
+  done
   ;;
 approve)
   [ $# -gt 0 ] || { echo "usage: mem.sh approve <path> [minutes]"; exit 1; }

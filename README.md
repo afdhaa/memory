@@ -1,4 +1,4 @@
-# project-memory v3.6
+# project-memory v3.7
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -59,7 +59,7 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 85 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs 89 automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).
@@ -144,6 +144,16 @@ Examples:
          Why: it allows about 60 requests per minute per key; bulk product uploads exceeded that.
          Do instead: wait 1 second between requests in every create/publish loop (see syncProducts()).
 
+**Unconfirmed entries.** What you tell the agent is recorded as `(user, …)` and trusted. What the
+agent concludes on its own is recorded as `(agent, seen: 1, unconfirmed)`: agents still see it, but
+must check it against the code before relying on it. It becomes confirmed when you approve it (in
+chat or by deleting `, unconfirmed` in a PR review), when it comes up again in a later session, or
+when the agent verifies it with a test or command. Unconfirmed entries never become project Rules.
+Ask **"review memory"** (or "cek memori") to go through them; `mem.sh lint` flags those older than
+30 days.
+
+    1. **[2026-10-21] The supplier API rejects bursts of product uploads with HTTP 429** #supplier #produk @src/services/supplier.js (agent, seen: 1, unconfirmed)
+
 The labels `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` are always in English because the
 hooks recognise them. Ask the agent to **"clean up memory"** to rewrite (and translate) older entries.
 
@@ -159,6 +169,7 @@ The skill understands both English and Indonesian phrasing.
 | "what do you know about X" | summary from memory with file references |
 | "freeze / don't touch folder X" / "jangan sentuh …" | area frozen (`#hold`); the agent must ask before editing it |
 | "update memory" | records everything worth keeping from this session |
+| "review memory" / "cek memori" | walks you through unconfirmed agent entries: keep, fix or drop |
 | "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites cryptic or padded entries, re-checks with lint |
 | "rescan the project" / "scan ulang" | `mem.sh scan`, then updates Project summary, Key facts and "How it fits together" if needed |
 | "don't save this" / "jangan dicatat" | nothing is stored |
@@ -168,6 +179,7 @@ The skill understands both English and Indonesian phrasing.
     bash .agents/skills/project-memory/scripts/mem.sh search pricing product
     bash .agents/skills/project-memory/scripts/mem.sh path src/api/
     bash .agents/skills/project-memory/scripts/mem.sh lint      # also: missing @paths, stale entries, duplicates, filler words
+    bash .agents/skills/project-memory/scripts/mem.sh review    # unconfirmed agent entries, oldest first
     bash .agents/skills/project-memory/scripts/mem.sh stats
     bash .agents/skills/project-memory/scripts/mem.sh scan      # re-index the repo
     bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # lift #hold for 30 minutes
@@ -191,7 +203,7 @@ What the hooks do in Claude Code and Codex:
 | Before stopping | reminds the agent to record memory if code changed but memory did not (at most 3 times per session) |
 
 Turn hooks off: `export PM_HOOKS=off`. Settings: `PM_RECALL_MAX` (5), `PM_MAX_NUDGES` (3),
-`PM_STALE_DAYS` (120), `PM_USER_MEMORY`.
+`PM_STALE_DAYS` (120), `PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY`.
 
 ### Notes for omp
 
