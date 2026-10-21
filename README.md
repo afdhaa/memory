@@ -1,4 +1,4 @@
-# project-memory v3.8.1
+# project-memory v3.9
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -59,7 +59,7 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 96 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs 102 automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).

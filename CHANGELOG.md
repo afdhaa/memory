@@ -3,6 +3,24 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.9.0
+Tested on three real repositories (Node/Express + Prisma, Go/Gin, FastAPI + React monorepo).
+- Scan: sub-packages of monorepos (`backend/`, `frontend/`…) with their frameworks and commands;
+  lock files at the repo root are honoured; shell scripts in `scripts/` folders are listed.
+- Scan: the README title is taken from image headings (alt text); the summary comes from the first
+  real paragraph or tagline blockquote, skipping lists and "…:" intros, with a manifest fallback;
+  markdown links are stripped.
+- Scan: docs list covers any README spelling and root-level guides (development.md…), and skips
+  AGENTS.md/CLAUDE.md that only hold the skill's block; recently active areas omit deleted paths;
+  a `.env` committed to git is reported as such; image folders are left out of Key facts.
+- `mem.sh review` only matches the source marker of an entry (no false positives from prose);
+  `search` skips the generated scan block and returns 12 shortened lines; lint says when user
+  memory is missing.
+- SKILL.md: where user rules go (project Rules, area directives, user memory), a Rule format with
+  tags and `@path`, contract vs `#hold`, what reading code can verify, when to rewrite progress,
+  newest-first decisions with the marker on the title line, and pointing to existing docs instead
+  of copying them.
+
 ## 3.8.1
 - MIT license and this changelog.
 - The installer's closing message is in English.

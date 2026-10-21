@@ -2,10 +2,10 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "review memory", "cek memori", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.8.1
+  version: 3.9.0
 ---
 
-# Project Memory (v3.8)
+# Project Memory (v3.9)
 
 Every coding agent working in this repo shares one long-term memory, kept as Markdown.
 No server, no database: the files are the memory, `scripts/mem.sh` and `grep` are the
@@ -64,7 +64,10 @@ Helper (path relative to this SKILL.md; works from anywhere inside the repo):
    file) a newcomer needs, saying what lives there and where new code of that kind goes, e.g.
    ``- `src/services/` — business logic (pricing, catalogue, supplier sync); new features start here.``
    Take the folder list from the generated Layout; skip folders nobody edits (build output, vendored code).
-5. Tell the user in one line.
+5. If the repo already documents its layout, commands or endpoints (AGENTS.md, CLAUDE.md, a docs page),
+   do not copy them: point to them ("Endpoint list: see AGENTS.md") and write only what they lack, so
+   the two never drift apart.
+6. Tell the user in one line.
 
 Do the same when `index.md` has no Project summary or `codebase.md` has an empty "How it fits
 together" or "Project layout" yet. Re-run the scan when lint says it is out of date or after big structural changes;
@@ -109,13 +112,14 @@ Write **immediately** — not only at the end — when (in *confirm* mode, only 
 
 | Event | Where |
 |---|---|
-| User corrects you or states a preference **for this project** | `gotchas.md` → "User directives" (or `index.md` Rules if project-wide) |
-| User states a preference **for every project** ("selalu", "di semua project", "always") | `~/.agents/memory/user.md` |
+| User states a rule for the **whole project** ("format JSON jangan diubah", "always use uv here") | `index.md` Rules |
+| User corrects you about **one area or file** | `gotchas.md` → "User directives", with its `@path` |
+| User states a preference **for every project** ("di semua project", "for all my projects"; "always"/"selalu" only when not tied to this project or one of its areas) | `~/.agents/memory/user.md` |
 | A decision is made (library, design, "don't touch X") | `decisions.md`, with the reason |
 | Something non-obvious bit you (setup step, flaky test, misleading name) | `gotchas.md` |
 | A multi-step workflow succeeded and will recur | `procedures/<name>.md` |
 | Substantial knowledge about one area | `topics/<area>.md` (+ add it to the map) |
-| End of every task | rewrite `progress.md` |
+| End of a task that changed the state of the work (code, plan, open questions) — not after a pure question | rewrite `progress.md` |
 
 When unsure whether a preference is project-only or global, keep it in the project and
 ask once. Never copy project secrets, names of private systems or client data into `user.md`.
@@ -176,7 +180,9 @@ the code or the chat?"* If not, rewrite it.
    Do instead: run `docker compose up -d db` before `npm run test:int`.
 ```
 
-**Decision** — one line when the reason fits in one sentence, otherwise a block:
+**Decision** — one line when the reason fits in one sentence, otherwise a block. Insert new decisions
+at the top, right under the header (newest first). An unconfirmed marker goes on the first line
+(the `###` title of a block), never at its end:
 ```
 - 2026-10-14 · Keep the legacy auth module for now, because the mobile app v2 still logs in through /v1/login. #auth @src/auth/legacy/ #hold (user)
 
@@ -185,6 +191,12 @@ The CLI caches API responses on disk in a single SQLite file.
 Why: the tool is single-user and must not require a separate server process.
 Rejected: Redis — needs a running service; JSON files — slow and unsafe with concurrent writes.
 Revisit if: we add multi-user sync.
+```
+
+**Rule** (`index.md` Rules) — one full sentence with its reason; add tags, `@path` and the source so it
+also appears before edits to that code:
+```
+- Never change the JSON response format; the RealWorld spec and other frontends depend on it. #api #json @articles/serializers.go @users/serializers.go (user, 2026-10-21)
 ```
 
 Topic files, procedures and `progress.md` follow the templates in `references/writing.md`.
@@ -218,8 +230,10 @@ that comes from **your own** conclusion — not from the user — starts as unco
 - **Confirm** by removing `, unconfirmed` when one of these happens:
   1. the user approves it (in chat, or in a PR review of `.memory/`);
   2. it comes up again in a later session — increment `seen` to 2 and drop the marker;
-  3. you verified it with evidence in this session (a test, a command's output, the code itself) —
-     say what in the entry: `Why: … (verified: npm test fails without it)`.
+  3. you verified it with evidence in this session — say how in the entry: `(verified: npm test fails
+     without it)`. A run (test, command, measurement) verifies anything. Reading the code verifies
+     only **static facts** (a config value, which function calls which); a claim about runtime
+     behaviour (it is slow, it fails, it times out) stays unconfirmed until it is run or the user confirms.
   Ways 2 and 3 confirm **facts** (gotchas, notes). A **decision you made yourself** (a design or
   library choice) stays unconfirmed until the user approves it: checking that the code matches the
   entry proves the entry is accurate, not that the user agrees with the choice.
@@ -283,6 +297,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 | "forget / lupakan …" | Remove it (strike through a decision), confirm. |
 | "what do you know about X / apa yang kamu tahu soal X" | `mem.sh search X`, summarise with file references. |
 | "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. |
+| "<output/API/format> must not change" (a contract, not a freeze) | `index.md` Rule with `@path`, no `#hold`: the code may change as long as the contract holds. |
 | "update memory" | Capture step for the whole session + inbox triage. |
 | "mode konfirmasi / ask before saving memory" | `mem.sh mode confirm` (`--global` for every project), confirm in one line. "mode otomatis" → `mem.sh mode auto`. |
 | "review memory / cek memori" | `mem.sh review`; show each unconfirmed entry in one plain line and ask: keep, fix or drop. Apply the answers. |

@@ -223,6 +223,24 @@ check "@scope text in the scan is not an @path tag" '[ "$o" = "{}" ]' "$o"
 mkdir -p "$TMP/home"; out="$(cd "$TMP/home" && HOME="$TMP/home" bash "$SRC/scripts/mem.sh" scan 2>&1)"
 check "scan refuses to create .memory/ in \$HOME" '[ ! -d "$TMP/home/.memory" ]' "$out"
 
+
+echo "• scan (monorepo, real-world READMEs)"
+W="$TMP/mono-app"; mkdir -p "$W/backend/scripts" "$W/frontend/src" "$W/img" "$W/old" && cd "$W" && git init -q && git config user.email t@t && git config user.name t
+printf '# ![Shop API](logo.png)\n\n[![CI](x.svg)](ci)\n\n> ### Backend and web app for the clinic shop, built on FastAPI and React.\n\n## Features\n\n- fast\n' > README.md
+printf '[project]\nname = "api"\ndependencies = ["fastapi>=0.1", "sqlmodel>=0.0.1", "pytest"]\n' > backend/pyproject.toml
+printf '{"name":"web","scripts":{"dev":"vite"},"dependencies":{"react":"^19.0.0"}}\n' > frontend/package.json
+printf '#!/bin/sh\npytest\n' > backend/scripts/test.sh; echo x > frontend/src/main.tsx; echo x > img/a.png; echo x > old/gone.js
+printf 'A=1\n' > .env; git add -A && git commit -qm init && git rm -q -r old && git commit -qm "remove old"
+bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
+check "scan: title from an image heading, summary from the blockquote" 'printf "%s" "$cb" | grep -q "(Shop API)" && printf "%s" "$cb" | grep -q "describes itself as: \"Backend and web app for the clinic shop"' "$cb"
+check "scan: sub-packages with their frameworks and commands" 'printf "%s" "$cb" | grep -q "\`backend/\` — Python (pip) — FastAPI, SQLModel, pytest" && printf "%s" "$cb" | grep -q "(in \`frontend/\`) \`npm run dev\` — vite"' "$cb"
+check "scan: shell scripts, committed .env, no deleted folders" 'printf "%s" "$cb" | grep -q "Shell scripts: \`backend/scripts/test.sh\`" && printf "%s" "$cb" | grep -q "\`.env\` is committed to git" && ! printf "%s" "$cb" | grep -q "\`old/\`"' "$cb"
+check "scan: Key facts skip image folders and show sub-package stacks" '! grep "^- Main folders" .memory/index.md | grep -q "img/" && grep "^- Stack" .memory/index.md | grep -q "FastAPI"' "$(cat .memory/index.md)"
+printf -- '- Check the entries in gotchas.md (gotchas.md, unconfirmed) tomorrow.\n' >> .memory/progress.md
+o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"; check "review ignores prose that mentions \"unconfirmed\"" '! printf "%s" "$o" | grep -q "progress.md"' "$o"
+o="$(bash "$SRC/scripts/mem.sh" search fastapi 2>&1)"; check "search skips the generated scan block" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"
+cd "$S"
+
 echo "• edge cases"
 E="$TMP/C# [x] app"; mkdir -p "$E/src/api" "$E/app/(auth)" && cd "$E" && git init -q && git config user.email t@t && git config user.name t
 cp -R "$SRC/assets/templates" .memory; mkdir -p .memory/topics

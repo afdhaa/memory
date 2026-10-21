@@ -10,7 +10,7 @@ export LC_ALL=C   # byte semantics: odd encodings in READMEs/manifests never cra
 ROOT="$1"; MODE="${2:-write}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || exit 1
-TAB="$(printf '\t')"
+TAB="$(printf '\t')"; BT='`'
 TODAY="$(date +%Y-%m-%d)"
 IS_GIT=""; git rev-parse --git-dir >/dev/null 2>&1 && IS_GIT=1
 HEAD_SHA=""; [ -n "$IS_GIT" ] && HEAD_SHA="$(git rev-parse --short HEAD 2>/dev/null)"
@@ -40,12 +40,20 @@ LANGS="$(printf '%s\n' "$FILES" | awk -F/ '
 LANG_LINE="$(printf '%s\n' "$LANGS" | awk -F'\t' 'NF { print $2 " (" $1 ")" }' | join ', ')"
 LANG_TOP="$(printf '%s\n' "$LANGS" | awk -F'\t' 'NF && n++ < 3 { print $2 }' | join ', ')"
 
+haslock() { [ -f "$1" ] || [ -f "$ROOT/$1" ]; }   # lock files may live at the monorepo root
+known() { # known "<file…>" "name:Display …" → "Display, Display"
+  local text; text="$(cat $1 2>/dev/null | lower)"
+  printf '%s\n' "$2" | tr ' ' '\n' | while IFS=: read -r k v; do
+    printf '%s\n' "$text" | grep -qE "(^|[^a-z0-9_.-])$k([^a-z0-9_-]|$)" && printf '%s\n' "${v//_/ }"; done | awk '!s[$0]++' | join ', '
+}
+# detect_stack: stack and commands of the project in the current directory (root, then each sub-package)
+detect_stack() {
 # ---- Node / JS ----
-PM=""; RUN=""; STACK=""; CMDS=""; FACT_CMDS=""
+PM=""; RUN=""
 if has package.json; then
   PKG="$(jget package.json "name dependencies devDependencies peerDependencies scripts engines workspaces packageManager")"
-  if has pnpm-lock.yaml; then PM=pnpm; RUN="pnpm"; elif has yarn.lock; then PM=yarn; RUN="yarn"
-  elif has bun.lockb || has bun.lock; then PM=bun; RUN="bun run"; else PM=npm; RUN="npm run"; fi
+  if haslock pnpm-lock.yaml; then PM=pnpm; RUN="pnpm"; elif haslock yarn.lock; then PM=yarn; RUN="yarn"
+  elif haslock bun.lockb || haslock bun.lock; then PM=bun; RUN="bun run"; else PM=npm; RUN="npm run"; fi
   case "$(printf '%s\n' "$PKG" | awk -F'\t' '$1 == "packageManager" { print $3 }')" in pnpm*) PM=pnpm; RUN=pnpm;; yarn*) PM=yarn; RUN=yarn;; esac
   FW="$(printf '%s\n' "$PKG" | awk -F'\t' '
     BEGIN { n = split("next:Next.js nuxt:Nuxt react:React react-native:React_Native expo:Expo vue:Vue svelte:Svelte @sveltejs/kit:SvelteKit @angular/core:Angular solid-js:Solid astro:Astro @remix-run/react:Remix electron:Electron express:Express fastify:Fastify @nestjs/core:NestJS hono:Hono koa:Koa @trpc/server:tRPC graphql:GraphQL socket.io:Socket.IO prisma:Prisma @prisma/client:Prisma drizzle-orm:Drizzle mongoose:Mongoose sequelize:Sequelize typeorm:TypeORM @supabase/supabase-js:Supabase firebase:Firebase tailwindcss:Tailwind @reduxjs/toolkit:Redux zustand:Zustand @tanstack/react-query:TanStack_Query zod:Zod vite:Vite webpack:webpack typescript:TypeScript turbo:Turborepo nx:Nx jest:Jest vitest:Vitest mocha:Mocha @playwright/test:Playwright cypress:Cypress storybook:Storybook eslint:ESLint @biomejs/biome:Biome prettier:Prettier", P, " ")
@@ -64,15 +72,10 @@ if has package.json; then
 fi
 
 # ---- other ecosystems (manifest text, known names only) ----
-known() { # known "<file…>" "name:Display …" → "Display, Display"
-  local text; text="$(cat $1 2>/dev/null | lower)"
-  printf '%s\n' "$2" | tr ' ' '\n' | while IFS=: read -r k v; do
-    printf '%s\n' "$text" | grep -qE "(^|[^a-z0-9_.-])$k([^a-z0-9_-]|$)" && printf '%s\n' "${v//_/ }"; done | awk '!s[$0]++' | join ', '
-}
 PYFILES="$(ls pyproject.toml setup.py setup.cfg Pipfile requirements*.txt 2>/dev/null | tr '\n' ' ')"
 if [ -n "$PYFILES" ]; then
-  tool=pip; has uv.lock && tool=uv; has poetry.lock && tool=Poetry; has Pipfile.lock && tool=Pipenv; has pdm.lock && tool=PDM
-  fw="$(known "$PYFILES" "django:Django flask:Flask fastapi:FastAPI starlette:Starlette pydantic:Pydantic sqlalchemy:SQLAlchemy alembic:Alembic celery:Celery pytest:pytest numpy:NumPy pandas:pandas scikit-learn:scikit-learn torch:PyTorch tensorflow:TensorFlow transformers:Transformers langchain:LangChain requests:requests httpx:httpx streamlit:Streamlit uvicorn:Uvicorn gunicorn:Gunicorn ruff:Ruff mypy:mypy")"
+  tool=pip; haslock uv.lock && tool=uv; haslock poetry.lock && tool=Poetry; haslock Pipfile.lock && tool=Pipenv; haslock pdm.lock && tool=PDM
+  fw="$(known "$PYFILES" "django:Django flask:Flask fastapi:FastAPI starlette:Starlette pydantic:Pydantic sqlalchemy:SQLAlchemy sqlmodel:SQLModel alembic:Alembic celery:Celery pytest:pytest numpy:NumPy pandas:pandas scikit-learn:scikit-learn torch:PyTorch tensorflow:TensorFlow transformers:Transformers langchain:LangChain requests:requests httpx:httpx streamlit:Streamlit uvicorn:Uvicorn gunicorn:Gunicorn ruff:Ruff mypy:mypy")"
   STACK="${STACK}- Python ($tool)${fw:+ — $fw}"$'\n'
   has .python-version && STACK="${STACK}- Python version: $(head -n1 .python-version)"$'\n'
   case "$fw" in *pytest*) CMDS="${CMDS}- \`pytest\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`pytest\`";; esac
@@ -105,6 +108,27 @@ if has mix.exs; then fw="$(known mix.exs "phoenix:Phoenix ecto:Ecto")"; STACK="$
 { has deno.json || has deno.jsonc; } && STACK="${STACK}- Deno"$'\n'
 for f in .nvmrc .node-version; do has "$f" && STACK="${STACK}- Node version ($f): $(head -n1 "$f")"$'\n'; done
 has .tool-versions && STACK="${STACK}- .tool-versions: $(grep -v '^#' .tool-versions | join ', ')"$'\n'
+return 0
+}
+STACK=""; CMDS=""; FACT_CMDS=""
+detect_stack
+
+# ---- sub-packages (monorepos): manifests one or two folders deep ----
+SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs)$' |
+  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|fixtures?|tests?|__tests__|e2e|docs?)/' | sed 's#/[^/]*$##' | awk '!s[$0]++' | head -n 8)"
+while IFS= read -r d; do
+  [ -n "$d" ] || continue
+  sub="$(cd "$d" && STACK="" && CMDS="" && FACT_CMDS="" && detect_stack && { printf '%s\n' "$STACK" | grep -vE '^$|^- (Workspaces|Node version|Python version)'; echo "@@"; printf '%s\n' "$CMDS" | grep -v '^$' | head -n 8; })"
+  st="$(printf '%s\n' "$sub" | sed '/^@@$/,$d' | sed "s#^- #- $BT$d/$BT — #")"
+  cm="$(printf '%s\n' "$sub" | sed '1,/^@@$/d' | sed "s#^- #- (in $BT$d/$BT) #")"
+  [ -n "$st" ] && STACK="${STACK}${st}"$'\n'
+  [ -n "$cm" ] && CMDS="${CMDS}${cm}"$'\n'
+done <<EOF
+$SUBDIRS
+EOF
+# shell scripts kept in scripts/ folders are usually the real entry points (test.sh, build.sh…)
+SH="$(printf '%s\n' "$FILES" | grep -E '(^|/)scripts/[^/]+\.sh$' | head -n 10 | sed 's/.*/`&`/' | join ', ')"
+[ -n "$SH" ] && CMDS="${CMDS}- Shell scripts: $SH"$'\n'
 
 # Makefile / justfile targets
 for mf in Makefile makefile GNUmakefile; do
@@ -150,7 +174,10 @@ for f in .env.example .env.sample .env.template .env.dist .env.local.example exa
   ENV="${ENV}- \`$f\` ($n): $(printf '%s\n' "$keys" | head -n 40 | join ', ')"$'\n'
 done
 for f in .env .env.local .env.development .env.production; do
-  [ -f "$f" ] && ENV="${ENV}- \`$f\` exists locally — values not read; never copy them into memory"$'\n'
+  [ -f "$f" ] || continue
+  if printf '%s\n' "$FILES" | grep -qxF "$f" && [ -n "$IS_GIT" ] && git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+    ENV="${ENV}- \`$f\` is committed to git (shared defaults) — values not read; never copy them into memory"$'\n'
+  else ENV="${ENV}- \`$f\` exists locally — values not read; never copy them into memory"$'\n'; fi
 done
 
 # ---- layout ----
@@ -162,33 +189,50 @@ LAYOUT="$(printf '%s\n' "$DIRS" | CH="$CHILDREN" awk -F'\t' '
   BEGIN { n = split(ENVIRON["CH"], L, "\n"); for (i = 1; i <= n; i++) { split(L[i], p, "\t"); if (p[1] != "") S[p[1]] = S[p[1]] "  - `" p[1] "/" p[2] "/` — " p[3] " files\n" } }
   NF { printf "- `%s/` — %s files\n%s", $2, $1, S[$2] }')"
 ROOTF="$(printf '%s\n' "$FILES" | awk -F/ 'NF == 1' | head -n 25 | sed 's/.*/`&`/' | join ', ')"
-TOP_DIRS="$(printf '%s\n' "$DIRS" | awk -F'\t' 'NF && $2 !~ /^\./ && n++ < 5 { print "`" $2 "/`" }' | join ', ')"
+TOP_DIRS="$(printf '%s\n' "$DIRS" | awk -F'\t' 'NF && $2 !~ /^\./ && tolower($2) !~ /^(img|imgs|images?|assets|static|media|screenshots)$/ && n++ < 5 { print "`" $2 "/`" }' | join ', ')"
 
 # ---- tests & docs ----
 TESTS="$(printf '%s\n' "$FILES" | grep -E '(^|/)(tests?|__tests__|spec|e2e)/|[._-](test|spec)\.[A-Za-z]+$|_test\.go$|(^|/)test_[^/]*\.py$')"
 NTESTS="$(printf '%s\n' "$TESTS" | grep -c .)"
 TEST_DIRS="$(printf '%s\n' "$TESTS" | awk -F/ 'NF { k = (NF > 1) ? $1 "/" : "(root)"; c[k]++ } END { for (k in c) print c[k] "\t" k }' |
   sort -t"$TAB" -k1,1nr -k2,2 | head -n 5 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
-DOCS="$(for f in README.md README.rst README AGENTS.md CLAUDE.md CONTRIBUTING.md ARCHITECTURE.md CHANGELOG.md SECURITY.md; do has "$f" && echo "\`$f\`"; done | join ', ')"
+DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|mdx|rst))$' | grep -viE '^(license|licence|code_of_conduct|changelog|release-notes|history)' |
+  while IFS= read -r f; do   # skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
+    awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
+  done | awk '{ k = (tolower($0) ~ /^readme/) ? 0 : 1; print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 | cut -f2 | head -n 8 | sed 's/.*/`&`/' | join ', ')"
 nd="$(printf '%s\n' "$FILES" | grep -cE '^docs?/.*\.(md|mdx|rst)$')"; [ "$nd" -gt 0 ] && DOCS="${DOCS:+$DOCS, }\`docs/\` ($nd pages)"
 
 # ---- README summary ----
 README_F=""; for f in README.md readme.md Readme.md README.rst README.txt README; do has "$f" && { README_F="$f"; break; }; done
 README_SUM=""; TITLE=""
 if [ -n "$README_F" ]; then
-  # first paragraph of prose (no code, HTML, badges, quotes, tables); title = first "# " or setext "===" heading
+  # title = first "# " or setext "===" heading; summary = first prose or blockquote paragraph that is not a
+  # list, a GitHub alert or an intro ending in ":" — looked for only before the second "##" section
   R="$(awk '
-    /^[[:space:]]*(```|~~~)/ { code = !code; next } code { next }
+    function emit() { if (p != "" && p !~ /:[[:space:]]*$/ && p !~ /^([-*+]|[0-9]+[.)])[[:space:]]/) found = p; p = ""; pl = 0 }
+    /^[[:space:]]*(```|~~~)/ { emit(); if (found != "") exit; code = !code; next } code { next }
     cm { if (/-->/) cm = 0; next }
     /^[[:space:]]*<!--/ { if (!/-->/) cm = 1; next }
-    /^=+[[:space:]]*$/ || /^-+[[:space:]]*$/ { if (p != "" && !multi) { if (title == "" && /^=/) title = p; p = ""; next } if (p != "") exit; next }
-    /^# / { if (title == "") { t = $0; sub(/^# +/, "", t); title = t } if (p != "") exit; next }
-    /^#/ { if (p != "") exit; next }
-    /^[[:space:]]*$/ { if (p != "") exit; next }
-    /^[[:space:]]*(<|!\[|\[!\[|>|\|)/ { if (p != "") exit; next }
-    { multi = (p != ""); p = p (p != "" ? " " : "") $0 }
-    END { gsub(/[[:space:]]+/, " ", p); print title; print p }' "$README_F")"
+    /^=+[[:space:]]*$/ && p != "" && pl == 1 { if (title == "") title = p; p = ""; pl = 0; next }
+    /^-+[[:space:]]*$/ && p != "" && pl == 1 { p = ""; pl = 0; if (++h2 >= 2) exit; next }
+    /^#/ { emit(); if (found != "") exit
+           if (title == "" && /^# /) { t = $0; sub(/^# +/, "", t); title = t } else if (/^## / && ++h2 >= 2) exit
+           next }
+    /^[[:space:]]*$/ { emit(); if (found != "") exit; next }
+    /^>/ { s = $0; sub(/^>[[:space:]]*/, "", s); if (s ~ /^\[!/) { alert = 1; next }
+           if (alert || s == "") { emit(); if (found != "") exit; next }
+           sub(/^#+[[:space:]]*/, "", s); p = p (p != "" ? " " : "") s; pl++; next }
+    { alert = 0 }
+    /^[[:space:]]*(<|!\[|\[!\[|\|)/ { emit(); if (found != "") exit; next }
+    { p = p (p != "" ? " " : "") $0; pl++ }
+    END { if (found == "") emit(); gsub(/[[:space:]]+/, " ", found); print title; print found }' "$README_F" |
+    sed -E 's/!\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]*)\]\([^)]*\)/\1/g; s/\*\*([^*]+)\*\*/\1/g; s/__([^_]+)__/\1/g; s/^[[:space:]]+//')"
   TITLE="$(printf '%s\n' "$R" | sed -n 1p | clip 80)"; README_SUM="$(printf '%s\n' "$R" | sed -n 2p | clip 320)"
+fi
+# no usable README paragraph: fall back to the manifest description
+if [ -z "$README_SUM" ]; then
+  has package.json && README_SUM="$(jget package.json description | awk -F'\t' '$1 == "description" { print $NF; exit }' | clip 320)"
+  [ -z "$README_SUM" ] && has pyproject.toml && README_SUM="$(awk '/^\[project\]/ { p = 1; next } /^\[/ { p = 0 } p && /^description[[:space:]]*=/ { sub(/^[^"]*"/, ""); sub(/".*$/, ""); print; exit }' pyproject.toml | clip 320)"
 fi
 
 # ---- git ----
@@ -198,7 +242,8 @@ if [ -n "$IS_GIT" ] && [ -n "$HEAD_SHA" ]; then
   GIT="It is versioned with git: branch \`$(git rev-parse --abbrev-ref HEAD)\`, $(git rev-list --count HEAD) commits, last commit on $(git log -1 --format=%cs)${remote:+, remote \`$remote\`}."
   ACTIVE="$(git -c core.quotePath=false log -n 300 --name-only --format= --relative 2>/dev/null | grep -v '^$' | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
     awk -F/ '{ k = (NF > 2) ? $1 "/" $2 "/" : ((NF == 2) ? $1 "/" : $1); c[k]++ } END { for (k in c) print c[k] "\t" k }' |
-    sort -t"$TAB" -k1,1nr -k2,2 | head -n 8 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
+    sort -t"$TAB" -k1,1nr -k2,2 | while IFS="$TAB" read -r c k; do [ -e "$k" ] && printf '%s\t%s\n' "$c" "$k"; done |
+    head -n 8 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
 fi
 
 # ---- assemble the generated block ----
@@ -207,7 +252,7 @@ sec() { [ -n "$(printf '%s' "$3" | tr -d '[:space:]')" ] && printf '\n### %s\n%s
 BODY="$(
   printf '### Overview\n'
   printf '**%s**%s has %s files%s.\n' "$(basename "$ROOT")" "${TITLE:+ ("$TITLE")}" "$NFILES" "${LANG_LINE:+ — by language: $LANG_LINE}"
-  [ -n "$README_SUM" ] && printf 'The README introduces it as: "%s"\n' "$README_SUM"
+  [ -n "$README_SUM" ] && printf 'It describes itself as: "%s"\n' "$README_SUM"
   [ -n "$GIT" ] && printf '%s\n' "$GIT"
   [ -n "$DOCS" ] && printf 'Documentation to read first: %s.\n' "$DOCS"
   sec "Stack" "Languages, frameworks and tools detected from the manifest files (versions are the declared ranges):" "$STACK"
@@ -298,7 +343,8 @@ if ! grep -q 'topics/codebase\.md' "$IDX"; then
   echo "~ $IDX (Map: topics/codebase.md)"
 fi
 FACTS=""
-[ -n "$LANG_TOP$STACK" ] && FACTS="- Stack: $(printf '%s\n' "$LANG_TOP" "$(printf '%s\n' "$STACK" | grep -E '^- (Node\.js|Python|Go |Rust|PHP|Ruby|Java|\.NET|Dart|Elixir|Deno)' | head -n 3 | sed 's/^- //')" | grep -v '^$' | join ' · ')"
+[ -n "$LANG_TOP$STACK" ] && FACTS="- Stack: $(printf '%s\n' "$LANG_TOP" "$(printf '%s\n' "$STACK" | grep -E '^- (`[^`]*` — )?(Node\.js|Python|Go |Rust|PHP|Ruby|Java|\.NET|Dart|Elixir|Deno)' |
+  awk '{ print (index($0, " — ") ? 0 : 1) "\t" NR "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2n | cut -f3 | head -n 3 | sed 's/^- //')" | grep -v '^$' | join ' · ')"
 [ -n "$FACT_CMDS" ] && FACTS="${FACTS:+$FACTS
 }- Commands: $FACT_CMDS"
 [ -n "$TOP_DIRS" ] && FACTS="${FACTS:+$FACTS

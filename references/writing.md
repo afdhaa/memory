@@ -46,7 +46,8 @@ teammate and every agent can read them. Exceptions:
 
 ## Anti-slop
 
-Memory is read under time pressure. Every word must carry information. Before saving, delete
+These rules apply to what you write into memory files; your chat replies follow the user's own
+preferences (the `📝 memory:` reporting line is fine). Memory is read under time pressure. Every word must carry information. Before saving, delete
 anything a reader would skim past. `mem.sh lint` flags the common offenders.
 
 Do not write:

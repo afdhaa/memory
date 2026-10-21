@@ -39,7 +39,7 @@ unconfirmed() {
     /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
     /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
     /^>/ || /~~/ { next }
-    /[(,][[:space:]]*unconfirmed[[:space:]]*\)/ {
+    /^([-*] |[0-9]+\. |### )/ && /\((user|agent)[^()]*unconfirmed[[:space:]]*\)/ {
       age = -1; if (match($0, /[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/)) age = dn(t) - dn(substr($0, RSTART, 10))
       print age "\t" FILENAME ":" FNR "\t" $0 }' ${FILES[@]+"${FILES[@]}"} /dev/null | sort -t"$(printf '\t')" -k1,1nr
 }
@@ -72,14 +72,16 @@ search)
   S=(${FILES[@]+"${FILES[@]}"}); [ -f "$USER_MEM" ] && S+=("$USER_MEM")
   awk -v q="$*" -v home="$HOME" '
     BEGIN { n = split(tolower(q), W, /[^a-z0-9#@\/._-]+/) }
-    FNR == 1 { inc = 0 }
+    FNR == 1 { inc = 0; gen = 0 }
+    /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated facts: read codebase.md instead
     /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
     /^[[:space:]]*$/ || /^>/ { next }
     { l = tolower($0); s = 0
       for (i = 1; i <= n; i++) if (W[i] != "" && index(l, W[i])) s++
       f = FILENAME; if (index(f, home) == 1) f = "~" substr(f, length(home) + 1)
-      if (s) printf "%d\t%s:%d: %s\n", s, f, FNR, $0 }' ${S[@]+"${S[@]}"} /dev/null \
-  | sort -t"$(printf '\t')" -k1,1nr -s | head -n "${PM_SEARCH_LIMIT:-25}" | cut -f2-
+      t = $0; if (length(t) > 220) t = substr(t, 1, 220) "…"
+      if (s) printf "%d\t%s:%d: %s\n", s, f, FNR, t }' ${S[@]+"${S[@]}"} /dev/null \
+  | sort -t"$(printf '\t')" -k1,1nr -s | head -n "${PM_SEARCH_LIMIT:-12}" | cut -f2-
   ;;
 path)
   [ $# -gt 0 ] || { echo "usage: mem.sh path <file-or-dir>"; exit 1; }
@@ -94,7 +96,7 @@ path)
         while (tag ~ /\)$/ && gsub(/\(/, "(", tag) < gsub(/\)/, ")", tag)) { tag = substr(tag, 1, length(tag) - 1); sub(/[.,;:]+$/, "", tag) }
         sub(/\/$/, "", tag)
         line = substr(line, RSTART + RLENGTH)
-        if (p == tag || index(p, tag "/") == 1 || index(tag, p "/") == 1) { print FILENAME ":" FNR ": " $0; next }
+        if (p == tag || index(p, tag "/") == 1 || index(tag, p "/") == 1) { t = $0; if (length(t) > 220) t = substr(t, 1, 220) "…"; print FILENAME ":" FNR ": " t; next }
       } }' ${FILES[@]+"${FILES[@]}"} /dev/null
   ;;
 secrets)
@@ -205,6 +207,7 @@ lint)
     for f in .memory/local.md .memory/inbox.md .memory/.stats.tsv .memory/.approvals; do
       [ -e "$f" ] && ! git check-ignore -q "$f" && w "$f is NOT gitignored"; done
   fi
+  [ -f "$USER_MEM" ] || echo "ℹ user memory not found at ${USER_MEM/#$HOME/~} (set PM_USER_MEMORY, or run the installer to create it)"
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
   [ "$issues" -eq 0 ]
   ;;

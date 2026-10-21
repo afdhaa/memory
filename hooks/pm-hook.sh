@@ -193,7 +193,7 @@ prompt)
   fi
   new="$(printf '%s\n' "$hits" | inject_new)"
   # unconfirmed agent entries are leads, not facts
-  printf '%s' "$new" | grep -qE '[(,][[:space:]]*unconfirmed[[:space:]]*\)' && new="$new
+  printf '%s' "$new" | grep -qE '\((user|agent)[^()]*unconfirmed[[:space:]]*\)' && new="$new
 (Entries marked \"unconfirmed\" are an agent's unverified conclusion: check them against the code before relying on them; confirm, fix or remove them.)"
   [ -n "$new" ] && ctx="${ctx:+$ctx
 }[project-memory] Memory entries that may be relevant to this request:
@@ -239,7 +239,7 @@ pre-edit)
   hits="$( { printf '%s\n' "$all_hits" | grep '#hold'; printf '%s\n' "$all_hits" | grep -v '#hold'; } | head -n 15 )"
   new="$(printf '%s\n' "$hits" | inject_new)"
   # unconfirmed agent entries are leads, not facts
-  printf '%s' "$new" | grep -qE '[(,][[:space:]]*unconfirmed[[:space:]]*\)' && new="$new
+  printf '%s' "$new" | grep -qE '\((user|agent)[^()]*unconfirmed[[:space:]]*\)' && new="$new
 (Entries marked \"unconfirmed\" are an agent's unverified conclusion: check them against the code before relying on them; confirm, fix or remove them.)"
   # the #hold gate applies on EVERY edit, unless the user approved each held path recently (mem.sh approve)
   holds_all="$(printf '%s\n' "$all_hits" | grep '#hold')"
