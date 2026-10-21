@@ -1,231 +1,232 @@
 # project-memory v3.5
 
-Memori berbentuk Markdown untuk coding agent: per project di `.memory/`, plus memori pribadi
-lintas project di `~/.agents/memory/user.md`. Satu skill untuk Claude Code, Codex, OpenCode,
-Antigravity, dan Pi/omp. Tanpa server, database, atau container; hook & helper bash + awk murni.
+Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
+shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
+Antigravity and Pi/omp. No server, database or container; the hooks and helpers are plain bash + awk.
 
-## 1. Instal
+## 1. Install
 
-Butuh: `bash`, `awk`, `git`. Jalan di macOS dan Linux.
+Requires `bash`, `awk` and `git`. Runs on macOS and Linux.
 
-### A. Per project (disarankan)
+### A. Per project (recommended)
 
-Clone sekali, lalu jalankan installer dari root setiap project yang ingin punya memori:
+Clone once, then run the installer from the root of every project that should have memory:
 
     git clone https://github.com/afdhaa/memory.git ~/tools/project-memory
-    cd ~/kode/project-saya
+    cd ~/code/my-project
     bash ~/tools/project-memory/scripts/install.sh
 
-Hasilnya:
+What it creates:
 
-| Lokasi | Isi |
+| Location | Contents |
 |---|---|
-| `.agents/skills/project-memory/` | salinan skill (dibaca Codex, OpenCode, Antigravity, omp) |
-| `.claude/skills/project-memory` | symlink ke salinan di atas (Claude Code) |
-| `.memory/` | memori project dari template, langsung di-*scan* (lihat §2) |
-| `AGENTS.md`, `CLAUDE.md` | blok instruksi singkat di antara `<!-- project-memory:start/end -->` |
-| `.claude/settings.json`, `.codex/hooks.json` | hooks otomatis (lihat §3) |
-| `.gitignore`, `.gitattributes`, pre-commit | file pribadi tidak di-commit, merge tanpa konflik, cegah token bocor |
-| `~/.agents/memory/user.md` | memori pribadi lintas project (dibuat bila belum ada) |
+| `.agents/skills/project-memory/` | copy of the skill (read by Codex, OpenCode, Antigravity, omp) |
+| `.claude/skills/project-memory` | symlink to the copy above (Claude Code) |
+| `.memory/` | project memory from the templates, scanned right away (see §2) |
+| `AGENTS.md`, `CLAUDE.md` | a short instruction block between `<!-- project-memory:start/end -->` |
+| `.claude/settings.json`, `.codex/hooks.json` | automatic hooks (see §3) |
+| `.gitignore`, `.gitattributes`, pre-commit | keeps personal files out of git, merges without conflicts, blocks leaked tokens |
+| `~/.agents/memory/user.md` | personal memory for all projects (created if missing) |
 
-| Opsi | Fungsi |
+| Option | Effect |
 |---|---|
-| *(tanpa opsi)* | semua yang di tabel atas |
-| `--no-hooks` | sama, tanpa hooks agent |
-| `--remove-hooks` | hapus hooks agent + blok pre-commit milik project-memory (yang lain tidak disentuh) |
-| `--global` | skill untuk semua project + user memory (tanpa `.memory/` dan hooks) |
+| *(none)* | everything in the table above |
+| `--no-hooks` | the same, without agent hooks |
+| `--remove-hooks` | removes the agent hooks and the project-memory pre-commit block (nothing else is touched) |
+| `--global` | skill for all projects + user memory (no `.memory/`, no hooks) |
 
-Aman dijalankan ulang. `.memory/` dan `user.md` tidak pernah ditimpa; hook lain dan pre-commit
-yang sudah ada dipertahankan (backup `.bak` untuk file JSON).
+Safe to re-run. `.memory/` and `user.md` are never overwritten; other hooks and an existing
+pre-commit hook are kept (JSON files get a `.bak` backup).
 
-### B. Global (semua project, tanpa hooks)
+### B. Global (all projects, no hooks)
 
     bash ~/tools/project-memory/scripts/install.sh --global
 
-Menyalin skill ke `~/.agents/skills`, `~/.claude/skills`, `~/.config/opencode/skills`, dan
-`~/.gemini/antigravity/skills`. Saat dipakai di project tanpa `.memory/`, agent membuatnya
-sendiri dari template.
+Copies the skill to `~/.agents/skills`, `~/.claude/skills`, `~/.config/opencode/skills` and
+`~/.gemini/antigravity/skills`. In a project without `.memory/`, the agent creates it from the
+templates.
 
-### C. Lewat registry omp (skills.omp.sh)
+### C. From the omp registry (skills.omp.sh)
 
-Bila sudah dipublikasikan (lihat §5):
+Once published (see §5):
 
-    omp skill install -g @<scope>/project-memory     # semua project
-    omp skill install @<scope>/project-memory        # project ini saja
+    omp skill install -g @<scope>/project-memory     # all projects
+    omp skill install @<scope>/project-memory        # this project only
 
-omp meminta konfirmasi karena skill ini membawa script.
+omp asks for confirmation because the skill ships scripts.
 
-### Cek instalasi
+### Check the installation
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-76 tes otomatis di repo sementara (tidak menyentuh project/memori Anda). Lulus di bash 5 +
-mawk/gawk dan bash 3.2 + BWK awk (macOS). Installer tidak butuh python/node/jq: hooks digabung
-ke `settings.json`/`hooks.json` yang sudah ada dengan awk, hook lain tetap utuh (backup `.bak`).
+Runs 82 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
+jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
+intact (`.bak` backup).
 
-## 2. Mulai pakai
+## 2. Getting started
 
-### Scan project baru
+### Scan a new project
 
-Saat `.memory/` dibuat, installer langsung memindai repo. Tanpa installer (mis. skill global di
-omp), jalankan sendiri dari root project — `.memory/` dibuat otomatis bila belum ada:
+When `.memory/` is created, the installer scans the repo. Without the installer (for example with
+the global skill in omp), run the scan from the project root; it creates `.memory/` if needed:
 
-    bash ~/tools/project-memory/scripts/mem.sh scan            # atau .agents/skills/project-memory/scripts/mem.sh
-    bash ~/tools/project-memory/scripts/mem.sh scan --print    # lihat hasilnya saja, tidak menulis apa pun
+    bash ~/tools/project-memory/scripts/mem.sh scan            # or .agents/skills/project-memory/scripts/mem.sh
+    bash ~/tools/project-memory/scripts/mem.sh scan --print    # print the result only, write nothing
 
-`.memory/topics/codebase.md` terdiri dari dua bagian:
+`.memory/topics/codebase.md` has two parts:
 
-1. **How it fits together** — penjelasan naratif yang ditulis agent sesudah scan: bagian-bagian
-   utama kode, alur sebuah request/job dari titik masuk sampai penyimpanan, file mana yang dibaca
-   lebih dulu, dan konvensi yang tidak terlihat dari nama file. Scan tidak pernah mengubahnya.
-2. **Repository facts (generated)** — fakta hasil scan. Setiap bagian dibuka dengan satu kalimat
-   yang menjelaskan isi daftarnya:
+1. **How it fits together**: an overview the agent writes after the scan. It covers the main
+   parts of the code, how a request or job flows from the entry point to storage, which files to
+   read first, and conventions that the file names do not reveal. The scan never changes it.
+2. **Repository facts (generated)**: the scan output. Each section opens with one sentence that
+   says what its list contains:
 
-| Bagian | Isi |
+| Section | Contents |
 |---|---|
-| Overview | nama, ringkasan README, jumlah file per bahasa, branch/commit/remote, dokumen |
-| Stack | Node (npm/pnpm/yarn/bun + framework & versi), Python, Go, Rust, PHP, Ruby, Java/Kotlin, .NET, Dart, Elixir, Deno, versi runtime |
-| Commands | script `package.json`/`composer.json`, target `Makefile`/`justfile`, perintah standar (`go test ./...`, `cargo test`, `pytest`) |
-| Layout | folder utama + subfolder dengan jumlah file, file di root |
-| Infrastructure & CI | Docker, service docker-compose, GitHub Actions/GitLab CI/…, Vercel/Netlify/Fly/…, Terraform |
-| Config & environment | **nama** variabel dari `.env.example`; isi `.env` tidak pernah dibaca |
-| Tests | jumlah file tes dan lokasinya |
-| Recently active areas | folder yang paling sering berubah di 300 commit terakhir |
+| Overview | name, README summary, file count per language, branch/commits/remote, docs |
+| Stack | Node (npm/pnpm/yarn/bun + frameworks and versions), Python, Go, Rust, PHP, Ruby, Java/Kotlin, .NET, Dart, Elixir, Deno, runtime versions |
+| Commands | `package.json`/`composer.json` scripts, `Makefile`/`justfile` targets, standard commands (`go test ./...`, `cargo test`, `pytest`) |
+| Layout | main folders and subfolders with file counts, files at the root |
+| Infrastructure & CI | Docker, docker-compose services, GitHub Actions/GitLab CI/…, Vercel/Netlify/Fly/…, Terraform |
+| Config & environment | variable **names** from `.env.example`; `.env` contents are never read |
+| Tests | number of test files and where they are |
+| Recently active areas | folders changed most often in the last 300 commits |
 
-Scan juga menambahkan `topics/codebase.md` ke Map di `index.md` dan mengisi **Key facts** selama
-bagian itu masih kosong. Scan ulang hanya mengganti blok di antara `scan:start`/`scan:end`;
-teks di luar blok dan Key facts yang sudah diedit tidak disentuh. `codebase.md` versi lama yang belum
-punya bagian "How it fits together" otomatis mendapat bagian kosong itu untuk diisi agent. `mem.sh lint` mengingatkan
-bila scan sudah tertinggal lebih dari 150 commit (`PM_SCAN_STALE`).
+The scan also adds `topics/codebase.md` to the Map in `index.md` and fills **Key facts** while
+that section is empty. A re-scan replaces only the block between `scan:start`/`scan:end`; text
+outside the block and Key facts you have edited stay as they are. An older `codebase.md` without
+"How it fits together" gets that section, empty, for the agent to write. `mem.sh lint` warns when
+the scan is more than 150 commits old (`PM_SCAN_STALE`).
 
-### Sesudah scan
+### After the scan
 
-1. Buka agent di root project, lalu minta: **"lengkapi .memory/index.md dari hasil scan"**. Agent
-   menulis Project summary dan bagian "How it fits together" di `codebase.md` (di Claude Code &
-   Codex, hook mengingatkannya otomatis selama keduanya masih kosong).
-2. Kerja seperti biasa. Agent membaca memori di awal tugas dan mencatat keputusan, koreksi
-   Anda, jebakan, dan progres sebelum selesai. Setiap kali menulis, agent menutup jawabannya
-   dengan satu baris seperti `📝 memory: +1 gotcha (#test), progress`.
-3. Commit `.memory/` agar rekan tim dan agent lain ikut memakai memori yang sama.
+1. Open your agent at the project root and ask it to **"complete .memory/index.md from the scan"**.
+   The agent writes the Project summary and the "How it fits together" section of `codebase.md`.
+   In Claude Code and Codex, a hook reminds it while either is still empty.
+2. Work as usual. The agent reads memory at the start of a task and, before finishing, records
+   decisions, your corrections, gotchas and progress. Whenever it writes to memory, it ends its
+   reply with one line such as `📝 memory: +1 gotcha (#test), progress`.
+3. Commit `.memory/` so teammates and other agents share the same memory.
 
-### Gaya penulisan memori
+### How memory is written
 
-Isi `.memory/` ditulis untuk dibaca manusia (rekan tim, reviewer PR, Anda sendiri), bukan hanya
-agent.
+`.memory/` is written for people (teammates, PR reviewers, you) as much as for agents.
 
-**Bahasa: Inggris secara default**, apa pun bahasa percakapannya, agar semua orang dan semua agent
-bisa membacanya. Yang tetap ditulis apa adanya: teks UI, pesan error, dan istilah bisnis (dikutip,
-lalu dijelaskan). Supaya pencarian otomatis tetap menemukan catatan saat Anda bertanya dalam bahasa
-Indonesia, agent menambahkan istilah Anda sebagai tag (mis. `#harga`). Untuk memakai bahasa lain,
-tambahkan baris ini di Rules `index.md` (atau di `user.md` untuk semua project):
+**Language: English by default**, whatever language the conversation is in, so every person and
+every agent can read it. UI text, error messages and business terms are kept verbatim, quoted and
+then explained. So that automatic recall still finds an entry when you ask in another language,
+the agent adds your terms as tags (for example `#harga` next to `#pricing`). To use another
+language, add this line to the Rules in `index.md` (or to `user.md` for all projects):
 
     - Memory language: Indonesian
 
-**Aturan penulisan** (detailnya di SKILL.md, bagian *Writing style* dan *Anti-slop*):
+**Writing rules** (full version in SKILL.md, sections *Writing style* and *Anti-slop*):
 
-- Judul berupa kalimat utuh yang langsung menyebut intinya, bukan singkatan atau potongan kata.
-- Selalu ada **apa**, **kenapa** (`Why:`), dan **harus bagaimana** (`Do instead:`).
-- Konkret: sebut perintah, file, angka, atau pesan error.
-- **Anti-slop:** tanpa kalimat pengisi ("It is important to note…", "In order to"), tanpa kata promosi
-  (robust, seamless, comprehensive, leverage…), tanpa angka samar ("various", "several"), tanpa
-  gaya asisten ("I", "Great news", "Let me know"), tanpa emoji, dan tanpa tebakan yang ditulis
-  sebagai fakta.
-- `mem.sh lint` menandai kata-kata pengisi tersebut (teks di dalam `code` tidak dihitung).
+- The title is a complete sentence that states the point, not an abbreviation or a fragment.
+- Every entry says **what** happens, **why** (`Why:`) and **what to do** (`Do instead:`).
+- Concrete: name the command, file, number or error message.
+- **Anti-slop:** no filler ("It is important to note…", "In order to"), no marketing words
+  (robust, seamless, comprehensive, leverage…), no vague quantities ("various", "several"), no
+  assistant voice ("I", "Great news", "Let me know"), no emoji, and no guesses recorded as facts.
+- `mem.sh lint` flags those filler words (text inside `code` is ignored).
 
-Contoh:
+Examples:
 
     ✗ 1. **[2026-10-14] API 429** #api (agent, seen: 1)
          Do instead: sleep.
     ✗ 1. **[2026-10-14] Implemented a robust, seamless retry strategy for the API** #api
          Why: it is important to note that various errors can occur.
 
-    ✓ 1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api #produk @src/sync/ (agent, seen: 1)
+    ✓ 1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api @src/sync/ (agent, seen: 1)
          Why: it allows about 60 requests per minute per key; bulk product uploads exceeded that.
          Do instead: wait 1 second between requests in every create/publish loop (see syncProducts()).
 
-Label `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` selalu berbahasa Inggris karena dikenali
-hook. Minta **"rapikan memori"** untuk menulis ulang (dan menerjemahkan) catatan lama.
+The labels `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` are always in English because the
+hooks recognise them. Ask the agent to **"clean up memory"** to rewrite (and translate) older entries.
 
-### Perintah ke agent
+### Talking to the agent
 
-| Anda bilang | Hasil |
+The skill understands both English and Indonesian phrasing.
+
+| You say | Result |
 |---|---|
-| "ingat ini …" / "catat …" | dicatat untuk project ini |
-| "ingat untuk semua project …" | dicatat di `~/.agents/memory/user.md` |
-| "lupakan …" | dihapus (keputusan dicoret, tidak dihapus) |
-| "apa yang kamu tahu soal X" | ringkasan dari memori + rujukan file |
-| "jangan sentuh folder X" | area dibekukan (`#hold`); agent wajib minta izin sebelum mengedit |
-| "update memory" | catat semua yang penting dari sesi ini |
-| "rapikan memori" | gabung duplikat, buang yang basi, tulis ulang catatan kriptik/bertele-tele, cek ulang dengan lint |
-| "scan ulang" / "index ulang project" | `mem.sh scan`, lalu Project summary/Key facts diperbarui bila perlu |
-| "jangan dicatat" | tidak disimpan |
+| "remember …" / "ingat ini …" / "catat …" | recorded for this project |
+| "remember for all projects …" / "untuk semua project …" | recorded in `~/.agents/memory/user.md` |
+| "forget …" / "lupakan …" | removed (decisions are struck through, not deleted) |
+| "what do you know about X" | summary from memory with file references |
+| "freeze / don't touch folder X" / "jangan sentuh …" | area frozen (`#hold`); the agent must ask before editing it |
+| "update memory" | records everything worth keeping from this session |
+| "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites cryptic or padded entries, re-checks with lint |
+| "rescan the project" / "scan ulang" | `mem.sh scan`, then updates Project summary, Key facts and "How it fits together" if needed |
+| "don't save this" / "jangan dicatat" | nothing is stored |
 
-### Helper (bisa dijalankan manual)
+### Helpers (can be run by hand)
 
-    bash .agents/skills/project-memory/scripts/mem.sh search harga produk
+    bash .agents/skills/project-memory/scripts/mem.sh search pricing product
     bash .agents/skills/project-memory/scripts/mem.sh path src/api/
-    bash .agents/skills/project-memory/scripts/mem.sh lint      # + @path hilang, entri basi, duplikat, kata pengisi
+    bash .agents/skills/project-memory/scripts/mem.sh lint      # also: missing @paths, stale entries, duplicates, filler words
     bash .agents/skills/project-memory/scripts/mem.sh stats
-    bash .agents/skills/project-memory/scripts/mem.sh scan      # index ulang repo
-    bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # buka #hold 30 menit
+    bash .agents/skills/project-memory/scripts/mem.sh scan      # re-index the repo
+    bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # lift #hold for 30 minutes
 
-## 3. Dukungan per agent
+## 3. Agent support
 
-| Agent | Skill | Hooks otomatis |
+| Agent | Skill | Automatic hooks |
 |---|---|---|
-| Claude Code | `.claude/skills/` | ya (`.claude/settings.json`) |
-| Codex | `.agents/skills/` | ya (`.codex/hooks.json`) |
-| omp / Pi | `.agents/skills/`, `~/.agents/skills/` | tidak — agent mengikuti SKILL.md secara manual |
-| OpenCode, Antigravity | `.agents/skills/` | tidak — lewat instruksi di AGENTS.md |
+| Claude Code | `.claude/skills/` | yes (`.claude/settings.json`) |
+| Codex | `.agents/skills/` | yes (`.codex/hooks.json`) |
+| omp / Pi | `.agents/skills/`, `~/.agents/skills/` | no — the agent follows SKILL.md by itself |
+| OpenCode, Antigravity | `.agents/skills/` | no — through the instructions in AGENTS.md |
 
-Yang dilakukan hooks di Claude Code & Codex:
+What the hooks do in Claude Code and Codex:
 
-| Kapan | Apa |
+| When | What |
 |---|---|
-| Awal sesi / setelah compaction | `index.md`, `progress.md`, `user.md` disuntikkan; pengingat triase inbox |
-| Setiap prompt | maks. 5 catatan paling relevan disuntikkan (peringkat kata kunci, tanpa duplikat per sesi); kalimat koreksi ("jangan…", "salah…", "always…") ditangkap ke `inbox.md` dengan token disensor |
-| Sebelum edit file | catatan `@path` untuk file itu muncul; area `#hold` selalu minta izin (Claude Code: dialog izin; Codex: edit ditahan, agent bertanya ke Anda lalu menjalankan `mem.sh approve` setelah Anda setuju) |
-| Sebelum berhenti | pengingat mencatat bila kode berubah tapi memori tidak (maks. 3x/sesi) |
+| Session start / after compaction | injects `index.md`, `progress.md`, `user.md`; reminds the agent to triage the inbox |
+| Every prompt | injects up to 5 of the most relevant entries (keyword ranking, no repeats within a session); corrections ("don't…", "wrong…", "jangan…", "always…") are captured in `inbox.md` with tokens redacted |
+| Before a file edit | shows the `@path` entries for that file; `#hold` areas always need approval (Claude Code: permission prompt; Codex: the edit is blocked, the agent asks you and runs `mem.sh approve` once you agree) |
+| Before stopping | reminds the agent to record memory if code changed but memory did not (at most 3 times per session) |
 
-Matikan hooks: `export PM_HOOKS=off`. Atur: `PM_RECALL_MAX` (5), `PM_MAX_NUDGES` (3),
+Turn hooks off: `export PM_HOOKS=off`. Settings: `PM_RECALL_MAX` (5), `PM_MAX_NUDGES` (3),
 `PM_STALE_DAYS` (120), `PM_USER_MEMORY`.
 
-### Catatan omp
+### Notes for omp
 
-- Instal dengan cara A, B, atau C. omp membaca `.agents/skills/` (project) dan
-  `~/.agents/skills/` (global) tanpa konfigurasi tambahan, juga blok instruksi di `AGENTS.md`.
-- Hooks Claude Code tidak dijalankan omp (hooks omp berupa modul TS/JS), jadi recall dan
-  pencatatan dilakukan agent mengikuti SKILL.md. Untuk memastikan skill dipakai, ketik
-  `/skill:project-memory` di awal sesi.
-- Cek: tanya omp "skill apa saja yang berhubungan dengan memory?" — `project-memory` harus muncul.
-- Project baru dengan skill global: ketik `/skill:project-memory scan project ini`; agent
-  menjalankan `mem.sh scan` dari folder skill lalu menulis Project summary.
+- Install with method A, B or C. omp reads `.agents/skills/` (project) and `~/.agents/skills/`
+  (global) without extra configuration, and also the instruction block in `AGENTS.md`.
+- omp does not run Claude Code hooks (omp hooks are TS/JS modules), so the agent does recall and
+  recording itself by following SKILL.md. To make sure the skill is used, type
+  `/skill:project-memory` at the start of a session.
+- Check: ask omp "which skills are related to memory?" — `project-memory` should be listed.
+- New project with the global skill: type `/skill:project-memory scan this project`; the agent runs
+  `mem.sh scan` from the skill folder and then writes the Project summary.
 
-## 4. Update & hapus
+## 4. Update and uninstall
 
     git -C ~/tools/project-memory pull
-    cd ~/kode/project-saya && bash ~/tools/project-memory/scripts/install.sh   # salinan skill diperbarui
+    cd ~/code/my-project && bash ~/tools/project-memory/scripts/install.sh   # refreshes the skill copy
 
-Lewat registry: `omp skill update project-memory`.
-Hapus hooks: `install.sh --remove-hooks`; lalu hapus `.agents/skills/project-memory`,
-`.claude/skills/project-memory`, dan blok `project-memory` di `AGENTS.md`/`CLAUDE.md`.
-`.memory/` tetap milik Anda.
+From the registry: `omp skill update project-memory`.
+To uninstall: `install.sh --remove-hooks`, then delete `.agents/skills/project-memory`,
+`.claude/skills/project-memory` and the `project-memory` block in `AGENTS.md`/`CLAUDE.md`.
+`.memory/` stays yours.
 
-## 5. Publikasi (untuk pemelihara)
+## 5. Publishing (for maintainers)
 
 GitHub (`git@github.com:afdhaa/memory.git`):
 
-    bash scripts/selftest.sh         # harus 0 gagal
+    bash scripts/selftest.sh         # must report 0 failed
     git add -A && git commit -m "…" && git push
 
-skills.omp.sh (versi diambil dari `metadata.version` di SKILL.md):
+skills.omp.sh (the version comes from `metadata.version` in SKILL.md):
 
-    omp skill publish . --dry-run    # cek isi paket & pemindaian secret
-    omp skill version patch          # naikkan versi untuk rilis berikutnya
+    omp skill publish . --dry-run    # check package contents and the secret scan
+    omp skill version patch          # bump the version for the next release
     omp skill publish .
 
-## Tim
+## Teams
 
-- `.gitattributes` `merge=union` untuk `decisions.md` & `gotchas.md`: tambahan dari dua branch digabung tanpa konflik (lint menandai duplikat).
-- pre-commit menolak commit yang memasukkan token/password ke `.memory/`.
-- `inbox.md`, `local.md`, `.stats.tsv` tidak ikut di-commit.
+- `.gitattributes` sets `merge=union` for `decisions.md` and `gotchas.md`: additions from two branches merge without conflicts (lint flags duplicates).
+- The pre-commit hook rejects commits that put tokens or passwords into `.memory/`.
+- `inbox.md`, `local.md` and `.stats.tsv` are not committed.
