@@ -1,4 +1,4 @@
-# project-memory v3.12
+# project-memory v3.13
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -208,7 +208,7 @@ hooks recognise them. Ask the agent to **"clean up memory"** to rewrite (and tra
 | Mode | What the agent does |
 |---|---|
 | `auto` (default) | Writes memory as it works and reports each write in one line (`📝 memory: +1 gotcha …`) so you can veto it. |
-| `confirm` | Writes what **you** tell it (instructions, corrections, "remember…") right away. What it **concludes itself** (gotchas, decisions, codebase notes, the changelog line) it only proposes: at the end of the task it lists the exact entries, numbered, and writes only what you approve. |
+| `confirm` | Writes what **you** tell it (instructions, corrections, "remember…") right away. What it **concludes itself** (gotchas, decisions, codebase notes) it only proposes: at the end of the task it lists the exact entries, numbered, and writes only what you approve. |
 
 **Switch modes** in one of three ways:
 

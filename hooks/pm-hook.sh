@@ -94,8 +94,10 @@ case "$EVENT" in
 session-start)
   touch "$STATE/start"; rm -f "$STATE/nudged" "$STATE/nudges" "$STATE/injected" 2>/dev/null
   SOURCE="$(json_str source)"
-  idx=""; [ -f "$MEM/index.md" ] && idx="$(cat "$MEM/index.md")"
-  prog=""; [ -f "$MEM/progress.md" ] && prog="$(cat "$MEM/progress.md")"
+  # template comments (<!-- … -->) guide whoever writes the file; leave them out of the context
+  nocomment() { awk '/<!--/ && !/-->/ { c = 1; next } c { if (/-->/) c = 0; next } /^[[:space:]]*<!--.*-->[[:space:]]*$/ { next } { print }' "$1"; }
+  idx=""; [ -f "$MEM/index.md" ] && idx="$(nocomment "$MEM/index.md")"
+  prog=""; [ -f "$MEM/progress.md" ] && prog="$(nocomment "$MEM/progress.md")"
   files="$(cd "$MEM" && find topics procedures -type f -name '*.md' 2>/dev/null | sort | head -n 60)"
   ctx="[project-memory] Persistent memory for this project is in .memory/ (follow the project-memory skill). $DATA_NOTE
 --- .memory/index.md ---
@@ -116,8 +118,14 @@ $files"
       on && /^[[:space:]]*<!--/ { c = !/-->/; next } on && c { if (/-->/) c = 0; next }
       on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }'; }
   cbm=""; if [ -f "$MEM/topics/codebase.md" ]; then
-    section_empty "How it fits together" < "$MEM/topics/codebase.md" && cbm="the \"How it fits together\" section (3–6 short paragraphs in full sentences: main parts, how a request or job flows through the code, where to start reading, non-obvious conventions)"
-    section_empty "Project layout" < "$MEM/topics/codebase.md" && cbm="${cbm:+$cbm and }the \"Project layout\" section (one line per folder a newcomer needs: what lives there, where new code of that kind goes)"
+    # a small repo (the scan counts its files) needs a short explanation, and the generated Layout already lists everything
+    nf="$(sed -n 's/.* has \([0-9][0-9]*\) files.*/\1/p' "$MEM/topics/codebase.md" | head -n1)"
+    if [ "${nf:-999}" -lt 40 ]; then
+      section_empty "How it fits together" < "$MEM/topics/codebase.md" && cbm="the \"How it fits together\" section (small repo: 1–2 short paragraphs on what the main file does and how a call flows through it; leave \"Project layout\" empty unless a file's role is not obvious from its name)"
+    else
+      section_empty "How it fits together" < "$MEM/topics/codebase.md" && cbm="the \"How it fits together\" section (3–6 short paragraphs in full sentences: main parts, how a request or job flows through the code, where to start reading, non-obvious conventions)"
+      section_empty "Project layout" < "$MEM/topics/codebase.md" && cbm="${cbm:+$cbm and }the \"Project layout\" section (one line per folder a newcomer needs: what lives there, where new code of that kind goes)"
+    fi
   fi
   if printf '%s\n' "$idx" | section_empty "Project summary"; then
     scan="Read .memory/topics/codebase.md (generated repo scan)"
@@ -159,7 +167,7 @@ prompt)
         [ -f "$MEM/inbox.md" ] || printf '# Inbox\n\n> Captured automatically from user prompts (local, gitignored). Triaged by the agent: record durable items, then delete them.\n\n' > "$MEM/inbox.md"
         printf -- '- %s · "%s" <!-- %s -->\n' "$TODAY" "$excerpt" "$key" >> "$MEM/inbox.md"
       fi
-      ctx="[project-memory] This message looks like a correction or standing instruction (captured in .memory/inbox.md). If it is durable, record it now (rewritten in the memory language — English unless index.md sets another — as a clear entry) as a User directive in .memory/gotchas.md (or a Rule in index.md; user memory if it applies to every project) and remove it from the inbox. If it is a one-off, just remove it from the inbox."
+      ctx="[project-memory] This message looks like a correction or standing instruction (captured in .memory/inbox.md). If it is durable, record it now (rewritten in the memory language — English unless index.md sets another — as a clear entry) as a Rule in index.md if it applies to the whole project, a User directive in .memory/gotchas.md (with its @path) if it is about one area, or user memory if it applies to every project; a freeze (\"don't touch X\", \"jangan sentuh\") is a decision in decisions.md with @path and #hold. Then remove it from the inbox. If it is a one-off, just remove it from the inbox."
     fi
   fi
   # (b) prompt-based recall: rank memory entries against the prompt
@@ -170,6 +178,8 @@ prompt)
   if [ -n "${terms// /}" ]; then
     FILES=()
     while IFS= read -r f; do FILES+=("$f"); done < <(find "$MEM" -type f -name '*.md' ! -name index.md ! -name progress.md ! -name inbox.md ! -name README.md 2>/dev/null | sort)
+    # index.md was injected at session start; rules added to it since then must be recalled too
+    [ -f "$MEM/index.md" ] && [ -f "$STATE/start" ] && [ "$MEM/index.md" -nt "$STATE/start" ] && FILES+=("$MEM/index.md")
     [ "${#FILES[@]}" -gt 0 ] && hits="$(LC_ALL=C awk -v terms="$terms" -v k="${PM_RECALL_MAX:-5}" -v root="$ROOT/" '
       BEGIN { nt = split(terms, T, " ") }
       FNR == 1 { inc = 0; gen = 0 }
@@ -325,7 +335,7 @@ stop)
     cl="$(changelog_info "$ROOT")"
     case "$cl" in "rule	none"*) ;; *) CL_NOTE="If the work is finished and changes what users of the project see (a feature, a fix, a breaking change): $(printf '%s' "$cl" | cut -f3); skip refactors, tests and chores." ;; esac; fi
   reason="[project-memory] ${count} file(s) changed since .memory/ was last updated. Before stopping: if this work produced a decision, a user correction, a gotcha or a reusable procedure, record it in .memory/ following the project-memory skill, and update .memory/progress.md (your own work state). $CL_NOTE If nothing is worth recording, do not edit anything; just end your reply with: memory: nothing new."
-  [ "$MODE" = confirm ] && reason="[project-memory] ${count} file(s) changed since .memory/ was last updated. Confirm mode: record the user's own corrections and instructions now if they are not in memory yet. Update .memory/progress.md (personal) directly. If this work produced a decision, a gotcha or a reusable procedure worth keeping, do NOT write it yet. End your reply with a numbered memory proposal (target file + the exact entry) and ask the user which to save; save unanswered proposals as one line each in .memory/inbox.md. $CL_NOTE${CL_NOTE:+ Propose that changelog line too. }If nothing is worth recording, end your reply with: memory: nothing new."
+  [ "$MODE" = confirm ] && reason="[project-memory] ${count} file(s) changed since .memory/ was last updated. Confirm mode: record the user's own corrections and instructions now if they are not in memory yet. Update .memory/progress.md (personal) directly. If this work produced a decision, a gotcha or a reusable procedure worth keeping, do NOT write it yet. End your reply with a numbered memory proposal (target file + the exact entry) and ask the user which to save; save unanswered proposals as one line each in .memory/inbox.md. $CL_NOTE${CL_NOTE:+ The changelog line is part of the code change: write it directly, do not propose it. }If nothing is worth recording, end your reply with: memory: nothing new."
   printf '{"decision":"block","reason":"%s"}\n' "$(json_escape "$reason")"
   ;;
 *) emit_empty ;;

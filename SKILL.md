@@ -2,10 +2,10 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "review memory", "cek memori", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.12.0
+  version: 3.13.0
 ---
 
-# Project Memory (v3.12)
+# Project Memory (v3.13)
 
 Every coding agent working in this repo shares one long-term memory, kept as Markdown.
 No server, no database: the files are the memory, `scripts/mem.sh` and `grep` are the
@@ -57,10 +57,12 @@ Helper (path relative to this SKILL.md; works from anywhere inside the repo):
 3. Write **"How it fits together"** (3–6 paragraphs: main parts, how a request or job flows through
    the code, where to start reading) and **"Project layout"** (one line per folder: what lives there,
    where new code goes) in `topics/codebase.md` — templates in `references/writing.md`. Write only
-   what you read in the code, and say so when something is unclear.
-4. If the repo already documents its layout, commands or endpoints (AGENTS.md, CLAUDE.md, a docs page),
-   do not copy them: point to them ("Endpoint list: see AGENTS.md") and write only what they lack, so
-   the two never drift apart.
+   what you read in the code, and say so when something is unclear. **Small repo** (under ~40 files):
+   1–2 paragraphs, and leave "Project layout" out when the generated Layout already says it all.
+4. If the repo already documents its layout, commands, endpoints or design (AGENTS.md, CLAUDE.md,
+   `docs/`), do not copy them: point to them ("How signing works: see docs/signer.rst") and write
+   only what they lack, so the two never drift apart.
+   If the user does not want a section, write one line in it, `Not needed: <reason>`, so nobody asks again.
 5. Tell the user in one line.
 
 Do the same when `index.md` has no Project summary or `codebase.md` has an empty "How it fits
@@ -246,7 +248,9 @@ that comes from **your own** conclusion — not from the user — starts as unco
      behaviour (it is slow, it fails, it times out) stays unconfirmed until it is run or the user confirms.
   Ways 2 and 3 confirm **facts** (gotchas, notes). A **decision you made yourself** (a design or
   library choice) stays unconfirmed until the user approves it: checking that the code matches the
-  entry proves the entry is accurate, not that the user agrees with the choice.
+  entry proves the entry is accurate, not that the user agrees with the choice. When the user asked
+  for the feature and you chose the details, write `(agent, seen: 1, unconfirmed)` and say in `Why:`
+  what the user asked for and what you decided.
 - **Never promote** an unconfirmed entry to `index.md` Rules, and never add `#hold` to one.
 - **Report** new unconfirmed entries in your reporting line so the user can veto them:
   `📝 memory: +1 gotcha (unconfirmed: supplier 429)`.
@@ -268,8 +272,11 @@ current mode; set it only when the user asks ("tanya dulu sebelum mencatat", "mo
 - **Write directly** (the user's own words are the approval): explicit requests ("remember…",
   "ingat…", "catat…", "forget…", "lupakan…") and the user's corrections or standing instructions
   ("don't use axios", "jangan…", "selalu…") — recorded as `(user, …)` entries, reported as in auto mode.
+  A direct request to write something ("complete index.md", "write the codebase overview") is the
+  approval for exactly that.
 - **Propose first** everything else: your own gotchas, decisions, topics, procedures, `codebase.md`
-  sections, and the changelog line. `progress.md` is personal: write it directly.
+  sections. Not memory, so not proposed: `progress.md` (personal) and the changelog line, which is
+  part of the code change itself — write them directly and mention them.
 - Do the task first; do not interrupt the work to ask about memory.
 - At the end of the task, end your reply with **one numbered proposal**: for each item the target
   file and the exact entry as it would be written.
@@ -282,6 +289,9 @@ current mode; set it only when the user asks ("tanya dulu sebelum mencatat", "mo
 - Reporting line: `📝 memory: 3 proposed (waiting for your answer)`.
 
 ## 3. Curate (keep it small and true)
+
+When your code change makes a sentence in `topics/` (including `codebase.md`) or a procedure wrong,
+fix it in the same task.
 
 Every time you edit a memory file: keep `gotchas.md` sections sorted by importance and at
 **10 entries max**; keep `index.md` Rules at ~15 max; keep `user.md` under ~40 lines.
@@ -306,7 +316,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 | "… untuk semua project / always, everywhere" | Record in `~/.agents/memory/user.md`, confirm. |
 | "forget / lupakan …" | Remove it (strike through a decision), confirm. |
 | "what do you know about X / apa yang kamu tahu soal X" | `mem.sh search X`, summarise with file references. |
-| "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. |
+| "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. A hold covers whole files or folders; to protect one class or function, write a Rule naming it (no `#hold`) and tell the user. |
 | "<output/API/format> must not change" (a contract, not a freeze) | `index.md` Rule with `@path`, no `#hold`: the code may change as long as the contract holds. |
 | "update memory" | Capture step for the whole session + inbox triage. |
 | "mode konfirmasi / ask before saving memory" | `mem.sh mode confirm` (`--global` for every project), confirm in one line. "mode otomatis" → `mem.sh mode auto`. |

@@ -199,7 +199,7 @@ lint)
   # duplicates (e.g. after merge=union)
   while IFS= read -r m; do w "duplicate entry: $m"; done < <(awk '/^(- |[0-9]+\. )/ { k = $0; sub(/^[0-9]+\. /, "", k); sub(/^- /, "", k); if (seen[k]++) print FILENAME ":" FNR ": " substr($0, 1, 90) }' .memory/decisions.md .memory/gotchas.md 2>/dev/null)
   # filler / generated-sounding wording (see "Anti-slop" in SKILL.md); not in comments, quotes, code blocks or the scan block
-  SLOP_RE="it'?s (important|worth) (to note|noting|mentioning)|it is (important|worth) (to note|noting|mentioning)|in order to|as mentioned (above|earlier|before)|in summary|in conclusion|basically|plays? an? (key|crucial|vital|pivotal|important) role|best practices|robust|seamless(ly)?|comprehensive|powerful|cutting-edge|state-of-the-art|game-chang(er|ing)|leverag(e|es|ed|ing)|utiliz(e|es|ed|ing|ation)|delv(e|es|ed|ing)|streamlin(e|es|ed|ing)|crucial|pivotal|holistic|various|great news|let me know|feel free|as an ai|successfully"
+  SLOP_RE="it'?s (important|worth) (to note|noting|mentioning)|it is (important|worth) (to note|noting|mentioning)|in order to|as mentioned (above|earlier|before)|in summary|in conclusion|basically|plays? an? (key|crucial|vital|pivotal|important) role|best practices|robust|seamless(ly)?|comprehensive|powerful|cutting-edge|state-of-the-art|game-chang(er|ing)|leverag(e|es|ed|ing)|utiliz(e|es|ed|ing|ation)|delv(e|es|ed|ing)|streamlin(e|es|ed|ing)|crucial|pivotal|holistic|various|several|numerous|a (variety|number) of|great news|let me know|feel free|as an ai|successfully"
   while IFS= read -r m; do w "filler wording: $m → say concretely what it does or delete it"; done < <(SLOP_RE="$SLOP_RE" awk '
       BEGIN { re = "(^|[^a-z0-9_])(" ENVIRON["SLOP_RE"] ")([^a-z0-9_]|$)" }
       FNR == 1 { inc = 0; gen = 0; code = 0 }
@@ -262,7 +262,10 @@ lint)
   empty_sec() { awk -v h="## $2" '/^## /{ on = ($0 == h); if (on) seen = 1; next } on && /^[[:space:]]*<!--/ { c = !/-->/; next }
     on && c { if (/-->/) c = 0; next } on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }' "$1" 2>/dev/null; }
   todo=""; empty_sec .memory/index.md "Project summary" && todo="Project summary (index.md)"
-  for h in "How it fits together" "Project layout"; do empty_sec .memory/topics/codebase.md "$h" && todo="${todo:+$todo, }\"$h\" (topics/codebase.md)"; done
+  secs="How it fits together|Project layout"   # small repos (< 40 files): the generated Layout is enough
+  [ "$(sed -n 's/.* has \([0-9][0-9]*\) files.*/\1/p' .memory/topics/codebase.md 2>/dev/null | head -n1)" -lt 40 ] 2>/dev/null && secs="How it fits together"
+  IFS='|' read -r -a SECS <<< "$secs"
+  for h in "${SECS[@]}"; do empty_sec .memory/topics/codebase.md "$h" && todo="${todo:+$todo, }\"$h\" (topics/codebase.md)"; done
   [ -n "$todo" ] && echo "ℹ still empty: $todo — write them from the scan and the code"
   [ -f "$USER_MEM" ] || echo "ℹ user memory not found at ${USER_MEM/#$HOME/~} (set PM_USER_MEMORY, or run the installer to create it)"
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
@@ -271,7 +274,7 @@ lint)
 changelog)
   . "$HERE/changelog.sh"; IFS="$(printf '\t')" read -r kind what how < <(changelog_info "$ROOT")
   case "$kind" in fragments) echo "changelog: fragments ($what)";; generated) echo "changelog: generated from commits ($what)";;
-    file) echo "changelog: $what";; rule) echo "changelog: $what (index.md Rules)";; none) echo "changelog: none found";; esac
+    file) echo "changelog: $what";; rule) echo "changelog: $what (set in index.md)";; none) echo "changelog: none found";; esac
   echo "→ $how"
   ;;
 mode)

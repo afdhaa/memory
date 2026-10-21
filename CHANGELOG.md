@@ -3,6 +3,26 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.13.0
+Tested on six small repositories (slugify, itsdangerous, cast, itoa, phpdotenv,
+the-art-of-command-line), with two full agent sessions (auto and confirm mode).
+- Small repos (under 40 files): onboarding asks for 1–2 paragraphs and no "Project layout"; lint
+  stops asking for it. A section the user declined holds `Not needed: <reason>`.
+- Hooks: rules added to `index.md` during a session are recalled by prompts; session start leaves
+  template comments out; the capture nudge sends whole-project rules to `index.md` and freezes to
+  `decisions.md` with `#hold`; in confirm mode the changelog line is written with the code, not proposed.
+- Changelog: projects released with np or release-it keep notes on GitHub Releases (no file is
+  created); the question for projects with nothing also offers "release notes live elsewhere";
+  `- Changelog: none; …` is read correctly.
+- Scan: the manifest description is used when the README's first line is very short; reference
+  links and language-selector lines are cleaned; `README-*` translations are one entry after
+  `README.md`; `test.js` counts as a test; "1 file" wording; commits by bots (dependabot,
+  renovate, pre-commit-ci) are left out of "Recently active areas"; `vendor-bin/` is not a package.
+- SKILL.md: a direct request to write something is its approval in confirm mode; how to mark a
+  decision the user asked for but the agent designed; fix `topics/` sentences a change made wrong;
+  holds are file- or folder-level; point to `docs/` instead of repeating it.
+- Lint flags "several", "numerous", "a variety of".
+
 ## 3.12.0
 - Team mode removed (`mem.sh team`, the `Team mode:` rule and its hook message). With `progress.md`
   personal and finished work in the project's changelog, it no longer solved a problem. Agent

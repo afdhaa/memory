@@ -141,7 +141,7 @@ detect_stack
 # ---- sub-packages (monorepos): manifests one or two folders deep ----
 PLAIN=""
 SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs)$' |
-  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|samples?|fixtures?|tests?|__tests__|e2e|docs?|bench(mark)?s?|benchmark-apps|playgrounds?|templates?|\.[^/]+)/' | sed 's#/[^/]*$##' | awk '!s[$0]++')"
+  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|samples?|fixtures?|tests?|__tests__|e2e|docs?|bench(mark)?s?|benchmark-apps|playgrounds?|templates?|vendor-bin|tools?/[^/]+-bin|\.[^/]+)/' | sed 's#/[^/]*$##' | awk '!s[$0]++')"
 # the 8 largest packages (by files), not the first 8 alphabetically: in big monorepos those are the ones people work in
 SUBDIRS="$(printf '%s\n' "$FILES" | C="$SUBDIRS" awk -F/ 'BEGIN { n = split(ENVIRON["C"], L, "\n"); for (i = 1; i <= n; i++) if (L[i] != "") W[L[i]] = 1 }
   NF > 1 { if ($1 in W) c[$1]++; if (NF > 2 && (($1 "/" $2) in W)) c[$1 "/" $2]++ }
@@ -221,13 +221,13 @@ CHILDREN="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 2 { c[$1 "\t" $2]++ } END { f
 DIRS="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 1 && ($1 !~ /^\./ || $1 == ".github") { c[$1]++ } END { for (d in c) print c[d] "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | head -n 12)"
 # top-level folders, each followed by its largest subfolders as nested bullets
 LAYOUT="$(printf '%s\n' "$DIRS" | CH="$CHILDREN" awk -F'\t' '
-  BEGIN { n = split(ENVIRON["CH"], L, "\n"); for (i = 1; i <= n; i++) { split(L[i], p, "\t"); if (p[1] != "") S[p[1]] = S[p[1]] "  - `" p[1] "/" p[2] "/` — " p[3] " files\n" } }
-  NF { printf "- `%s/` — %s files\n%s", $2, $1, S[$2] }')"
+  BEGIN { n = split(ENVIRON["CH"], L, "\n"); for (i = 1; i <= n; i++) { split(L[i], p, "\t"); if (p[1] != "") S[p[1]] = S[p[1]] "  - `" p[1] "/" p[2] "/` — " p[3] (p[3] == 1 ? " file\n" : " files\n") } }
+  NF { printf "- `%s/` — %s file%s\n%s", $2, $1, ($1 == 1 ? "" : "s"), S[$2] }')"
 ROOTF="$(printf '%s\n' "$FILES" | awk -F/ 'NF == 1' | head -n 25 | sed 's/.*/`&`/' | join ', ')"
 TOP_DIRS="$(printf '%s\n' "$DIRS" | awk -F'\t' 'NF && $2 !~ /^\./ && tolower($2) !~ /^(img|imgs|images?|assets|static|media|screenshots)$/ && n++ < 5 { print "`" $2 "/`" }' | join ', ')"
 
 # ---- tests & docs ----
-TESTS="$(printf '%s\n' "$FILES" | grep -E '(^|/)(tests?|__tests__|spec|e2e)/|[._-](test|spec)\.[A-Za-z]+$|_test\.go$|(^|/)test_[^/]*\.py$')"
+TESTS="$(printf '%s\n' "$FILES" | grep -E '(^|/)(tests?|__tests__|spec|e2e)/|[._-](test|spec)\.[A-Za-z]+$|_test\.go$|(^|/)test_[^/]*\.py$|(^|/)tests?\.(js|mjs|cjs|ts|py|rb|go|rs|php|sh|java|kt|swift|c|cc|cpp|exs?|lua)$')"
 NTESTS="$(printf '%s\n' "$TESTS" | grep -c .)"
 TEST_DIRS="$(printf '%s\n' "$TESTS" | awk -F/ 'NF { k = (NF > 1) ? $1 "/" : "(root)"; c[k]++ } END { for (k in c) print c[k] "\t" k }' |
   sort -t"$TAB" -k1,1nr -k2,2 | head -n 5 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
@@ -235,7 +235,9 @@ DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|
   while IFS= read -r f; do
     case "$f" in AGENTS.md|CLAUDE.md|GEMINI.md) [ -L "$f" ] && continue ;; esac   # CLAUDE.md -> AGENTS.md: listed once   # skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
     awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ && !/^[[:space:]]*@\.?\/?AGENTS\.md[[:space:]]*$/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
-  done | awk '{ k = (tolower($0) ~ /^readme/) ? 0 : 1; print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 | cut -f2 | head -n 8 | sed 's/.*/`&`/' | join ', ')"
+  done | awk '{ l = tolower($0); k = (l ~ /^readme(\.[a-z]+)?$/) ? 0 : (l ~ /^readme[-_.]/ ? 2 : 1); print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 |
+  awk -F'\t' '$1 == 2 { tr[++t] = $2; next } { print "`" $2 "`" }   # README-de.md, README.zh-CN.md…: one entry
+    END { if (t > 2) print "`README-*` (" t " translations)"; else for (i = 1; i <= t; i++) print "`" tr[i] "`" }' | head -n 8 | join ', ')"
 nd="$(printf '%s\n' "$FILES" | grep -cE '^docs?/.*\.(md|mdx|rst|txt|adoc)$')"; [ "$nd" -gt 0 ] && DOCS="${DOCS:+$DOCS, }\`docs/\` ($nd pages)"
 # agent instructions scoped to a folder (frontend/AGENTS.md…) apply to everything below it
 SCOPED="$(printf '%s\n' "$FILES" | grep -E '^[^/].*/(AGENTS|CLAUDE)\.md$' | grep -vE '(^|/)(node_modules|vendor)/' | head -n 8 | sed 's/.*/`&`/' | join ', ')"
@@ -249,7 +251,8 @@ if [ -n "$README_F" ]; then
   # list, a GitHub alert or an intro ending in ":" — looked for only before the second "##" section
   R="$(awk '
     function words(s,  t) { t = s; gsub(/<[^>]*>|&[a-z]+;|\]\([^)]*\)/, " ", t); return gsub(/[A-Za-z][A-Za-z]+/, "&", t) }
-    function emit() { if (p != "" && p !~ /:[[:space:]]*$/ && p !~ /^([-*+]|[0-9]+[.)])[[:space:]]/ && words(p) >= 4) found = p; p = ""; pl = 0 }
+    function seps(x,  y) { y = x; return gsub(/∙| \| | · /, "", y) }
+    function emit() { if (p != "" && seps(p) < 3 && p !~ /:[[:space:]]*$/ && p !~ /^([-*+]|[0-9]+[.)])[[:space:]]/ && words(p) >= 4) found = p; p = ""; pl = 0 }
     /^[[:space:]]*(```|~~~)/ { emit(); if (found != "") exit; code = !code; next } code { next }
     cm { if (/-->/) cm = 0; next }
     /^[[:space:]]*<!--/ { if (!/-->/) cm = 1; next }
@@ -270,16 +273,18 @@ if [ -n "$README_F" ]; then
     /^[[:space:]]*(<|!\[|\[!\[|\|)/ { emit(); if (found != "") exit; next }
     { p = p (p != "" ? " " : "") $0; pl++ }
     END { if (found == "") emit(); gsub(/[[:space:]]+/, " ", found); print title; print found }' "$README_F" |
-    sed -E 's/\[!\[[^]]*\]\([^)]*\)\]\([^)]*\)//g; s/!\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]*)\]\([^)]*\)/\1/g; s/\*\*([^*]+)\*\*/\1/g; s/__([^_]+)__/\1/g
+    sed -E 's/\[!\[[^]]*\]\([^)]*\)\]\([^)]*\)//g; s/!\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]+)\]\[[^]]*\]/\1/g; s/\[([^]]+)\]([^(]|$)/\1\2/g; s/\*\*([^*]+)\*\*/\1/g; s/__([^_]+)__/\1/g
       s/\|[A-Za-z][^|]{0,40}\|_{0,2}//g; s/<[^>]*>/ /g; s/&nbsp;|&[a-z]+;/ /g; s/[[:space:]]+/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//')"
   TITLE="$(printf '%s\n' "$R" | sed -n 1p | clip 80)"; README_SUM="$(printf '%s\n' "$R" | sed -n 2p | clip 320)"
   [ "$(printf '%s' "$README_SUM" | tr -cs 'A-Za-z' ' ' | wc -w)" -ge 4 ] || README_SUM=""   # "&nbsp;", a lone link…
 fi
-# no usable README paragraph: fall back to the manifest description
-if [ -z "$README_SUM" ]; then
-  has package.json && README_SUM="$(jget package.json description | awk -F'\t' '$1 == "description" { print $NF; exit }' | clip 320)"
-  [ -z "$README_SUM" ] && has pyproject.toml && README_SUM="$(awk '/^\[project\]/ { p = 1; next } /^\[/ { p = 0 } p && /^description[[:space:]]*=/ { sub(/^[^"]*"/, ""); sub(/".*$/, ""); print; exit }' pyproject.toml | clip 320)"
-fi
+# the manifest description: used when the README gives no paragraph, or only a very short one ("... so better sign this")
+MDESC=""
+has package.json && MDESC="$(jget package.json description | awk -F'\t' '$1 == "description" { print $NF; exit }')"
+[ -z "$MDESC" ] && has pyproject.toml && MDESC="$(awk '/^\[(project|tool\.poetry)\]/ { p = 1; next } /^\[/ { p = 0 } p && /^description[[:space:]]*=/ { sub(/^[^"]*"/, ""); sub(/".*$/, ""); print; exit }' pyproject.toml)"
+[ -z "$MDESC" ] && has composer.json && MDESC="$(jget composer.json description | awk -F'\t' '$1 == "description" { print $NF; exit }')"
+[ -z "$MDESC" ] && has Cargo.toml && MDESC="$(awk '/^\[package\]/ { p = 1; next } /^\[/ { p = 0 } p && /^description[[:space:]]*=/ { sub(/^[^"]*"/, ""); sub(/".*$/, ""); print; exit }' Cargo.toml)"
+if [ -n "$MDESC" ] && { [ -z "$README_SUM" ] || [ "$(printf '%s' "$README_SUM" | wc -w)" -lt 8 ]; }; then README_SUM="$(printf '%s' "$MDESC" | clip 320)"; fi
 
 # ---- git ----
 GIT=""; ACTIVE=""
@@ -289,7 +294,9 @@ if [ -n "$IS_GIT" ] && [ -n "$HEAD_SHA" ]; then
   # leave out the oldest commit in view when it has no parent here (root commit, or the edge of a shallow CI clone):
   # it lists every file of the repo as changed
   NACT="$(git rev-list --count HEAD 2>/dev/null || echo 0)"; [ "$NACT" -gt 300 ] && NACT=300 || NACT=$((NACT - 1))
-  [ "$NACT" -gt 0 ] && ACTIVE="$(git -c core.quotePath=false log -n "$NACT" --name-only --format= --relative 2>/dev/null | grep -v '^$' | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
+  [ "$NACT" -gt 0 ] && ACTIVE="$(git -c core.quotePath=false log -n "$NACT" --name-only --format='@@%an' --relative 2>/dev/null |
+    # dependency and CI bumps by bots (dependabot, renovate, pre-commit-ci) say nothing about where people work
+    awk '/^@@/ { bot = (tolower($0) ~ /\[bot\]|dependabot|renovate|pre-commit-ci|github-actions|greenkeeper/); next } !bot && NF' | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
     awk -F/ '{ k = (NF > 2) ? $1 "/" $2 "/" : ((NF == 2) ? $1 "/" : $1); c[k]++ } END { for (k in c) print c[k] "\t" k }' |
     sort -t"$TAB" -k1,1nr -k2,2 | while IFS="$TAB" read -r c k; do [ -e "$k" ] && printf '%s\t%s\n' "$c" "$k"; done |
     head -n 8 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
@@ -318,7 +325,7 @@ BODY="$(
 - Files at the repository root: $ROOTF}"
   sec "Infrastructure & CI" "How the project is containerised, checked in CI and deployed:" "$INFRA"
   sec "Config & environment" "Configuration comes from environment variables. Only the variable names are listed; values are never read:" "$ENV"
-  [ "$NTESTS" -gt 0 ] && sec "Tests" "Where the automated tests live:" "- $NTESTS test files — $TEST_DIRS"
+  [ "$NTESTS" -gt 0 ] && sec "Tests" "Where the automated tests live:" "- $NTESTS test file$([ "$NTESTS" = 1 ] || echo s) — $TEST_DIRS"
   [ -n "$ACTIVE" ] && sec "Recently active areas" "Where most changes landed in the last ${NACT:-300} commits (files touched per folder) — a hint of where current work happens:" "- $ACTIVE"
 )"
 [ -n "${SECRET_RE:-}" ] && BODY="$(printf '%s\n' "$BODY" | grep -vE "$SECRET_RE")"
