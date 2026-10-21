@@ -3,6 +3,36 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.11.0
+Tested on six large open-source repositories (next.js, django, home-assistant, ruff, langchain,
+supabase), with a security review.
+- Installer: when `.claude/skills` and `.agents/skills` are one folder through a symlink (next.js,
+  supabase, home-assistant), it no longer deletes the fresh copy and copies the whole skill
+  repository, `.git` included, into the project; re-running it repairs such installs. Backups of
+  `settings.json`/`hooks.json` go into `.git/`, not the working tree; install messages show
+  project-relative paths.
+- Secret check: Stripe, Google API, GitLab, npm, PyPI, GitHub fine-grained tokens, Slack webhooks,
+  SendGrid, Twilio, `user:password@` in URLs and `KEY=value` pairs in any case (`DB_PASSWORD=…`,
+  `aws_secret_access_key = …`); inbox redaction covers the same formats.
+- Prompt injection: hooks present memory as information, not orders, and warn when injected
+  memory reads like planted instructions; `mem.sh lint` reports such entries as issues and notes
+  downloads piped into a shell; SKILL.md tells agents to report them instead of acting on them or
+  deleting them silently.
+- `progress.md` is personal and gitignored: each person's agent tracks its own work, so branches
+  never conflict on it (a copy committed earlier: `git rm --cached .memory/progress.md`; installer
+  and lint remind you). Finished, user-visible work goes to the project's changelog the way the
+  project keeps it — existing changelog, changesets/towncrier/release-notes folder, or notes
+  generated from commits; with none, the agent asks once and records the answer as a Rule.
+  `mem.sh changelog` shows which; the stop hook reminds the agent.
+- Team mode (`mem.sh team on`): agent entries confirmed only by a teammate's review, rules record
+  who gave them.
+- Scan: the largest sub-packages instead of the first eight alphabetically, skipping examples,
+  benchmarks and templates; "Recently active areas" no longer counts the edge commit of a shallow
+  clone; a project is not listed as its own dependency; reStructuredText substitutions removed from
+  the title; `.txt`/`.adoc` docs counted; `tests/runtests.py` detected; one version per dependency.
+- README: Security and privacy section (no network access, what reaches the model provider,
+  CODEOWNERS for memory and hooks) and team mode.
+
 ## 3.10.0
 Tested on five production repositories (excalidraw, koel, caddy, ripgrep, saleor).
 - Installer: never replaces a `CLAUDE.md` symlink (3.9.0 turned it into a copy) and restores one

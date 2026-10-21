@@ -1,4 +1,4 @@
-# project-memory v3.10
+# project-memory v3.11
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -76,7 +76,7 @@ your-project/
 ├── .memory/                    # project memory — committed, shared by the team and every agent
 │   ├── README.md               # explains these files to teammates (documentation, not memory)
 │   ├── index.md                # read at the start of every task: summary, rules, key facts, map
-│   ├── progress.md             # what is in progress, next, blocked — rewritten after each task
+│   ├── progress.md             # your own work state: in progress, next, blocked — gitignored
 │   ├── decisions.md            # why things are the way they are, with rejected alternatives
 │   ├── gotchas.md              # surprises and corrections, each with "Do instead"
 │   ├── topics/
@@ -208,7 +208,7 @@ hooks recognise them. Ask the agent to **"clean up memory"** to rewrite (and tra
 | Mode | What the agent does |
 |---|---|
 | `auto` (default) | Writes memory as it works and reports each write in one line (`📝 memory: +1 gotcha …`) so you can veto it. |
-| `confirm` | Writes what **you** tell it (instructions, corrections, "remember…") right away. What it **concludes itself** (gotchas, decisions, progress, codebase notes) it only proposes: at the end of the task it lists the exact entries, numbered, and writes only what you approve. |
+| `confirm` | Writes what **you** tell it (instructions, corrections, "remember…") right away. What it **concludes itself** (gotchas, decisions, codebase notes, the changelog line) it only proposes: at the end of the task it lists the exact entries, numbered, and writes only what you approve. |
 
 **Switch modes** in one of three ways:
 
@@ -246,6 +246,7 @@ The skill understands both English and Indonesian phrasing.
 | "freeze / don't touch folder X" / "jangan sentuh …" | area frozen (`#hold`); the agent must ask before editing it |
 | "update memory" | records everything worth keeping from this session |
 | "ask before saving memory" / "mode konfirmasi" | confirm mode: the agent proposes entries and writes only what you approve ("mode otomatis" switches back) |
+| "team mode" / "mode tim" | team mode on: entries confirmed in PR review, rules record who gave them |
 | "review memory" / "cek memori" | walks you through unconfirmed agent entries: keep, fix or drop |
 | "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites cryptic or padded entries, re-checks with lint |
 | "rescan the project" / "scan ulang" | `mem.sh scan`, then updates Project summary, Key facts and "How it fits together" if needed |
@@ -258,6 +259,8 @@ The skill understands both English and Indonesian phrasing.
     bash .agents/skills/project-memory/scripts/mem.sh lint      # also: missing @paths, stale entries, duplicates, filler words
     bash .agents/skills/project-memory/scripts/mem.sh review    # unconfirmed agent entries, oldest first
     bash .agents/skills/project-memory/scripts/mem.sh mode confirm   # ask before writing memory (auto = default)
+    bash .agents/skills/project-memory/scripts/mem.sh team on        # team mode (see Teams)
+    bash .agents/skills/project-memory/scripts/mem.sh changelog      # where finished work is recorded in this project
     bash .agents/skills/project-memory/scripts/mem.sh stats
     bash .agents/skills/project-memory/scripts/mem.sh scan      # re-index the repo
     bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # lift #hold for 30 minutes
@@ -319,9 +322,68 @@ skills.omp.sh (the version comes from `metadata.version` in SKILL.md):
 
 ## Teams
 
-- `.gitattributes` sets `merge=union` for `decisions.md` and `gotchas.md`: additions from two branches merge without conflicts (lint flags duplicates).
+- `.gitattributes` sets `merge=union` for `decisions.md` and `gotchas.md`: additions from two branches merge without conflicts (run `mem.sh lint` after a merge: it flags duplicates and sections over the cap).
 - The pre-commit hook rejects commits that put tokens or passwords into `.memory/`.
-- `inbox.md`, `local.md` and `.stats.tsv` are not committed.
+- `progress.md`, `inbox.md`, `local.md` and `.stats.tsv` are personal and not committed. What the team needs to know about finished work goes to the project's changelog (below).
+- `mem.sh lint` exits with 1 when it finds an issue, so it can run in CI on pull requests that touch `.memory/`.
+
+**Progress and the changelog.** `progress.md` is each person's own work state (what their agent is
+doing, what comes next) and is never committed, so parallel branches never conflict on it. Finished
+work that users of the project would notice (a feature, a fix, a breaking change) goes to the
+project's changelog, the way the project already keeps it — `mem.sh changelog` shows which:
+
+| The project has | The agent |
+|---|---|
+| `CHANGELOG.md` (or CHANGES, HISTORY, NEWS) | adds one line under `## Unreleased` in the file's style |
+| changesets, towncrier, `changelog.d/`, a release-notes folder (`docs/releases/`) | adds a fragment or release-note line there |
+| notes generated from commits or PR titles (release-please, semantic-release, git-cliff, release-drafter) | edits nothing; writes a clear conventional commit message |
+| nothing | asks you once whether to create `CHANGELOG.md`, and remembers the answer as a Rule (`- Changelog: CHANGELOG.md` / `- Changelog: none`) |
+
+Projects with `.memory/progress.md` committed by an earlier version: `git rm --cached .memory/progress.md`
+(the installer and lint remind you).
+
+**Team mode** — for teams where several people work on the same repository at once:
+
+    bash .agents/skills/project-memory/scripts/mem.sh team on     # or: tell the agent "team mode"
+
+It writes `- Team mode: on` into `.memory/index.md` Rules (commit it so the whole team gets it). Then:
+
+| Without team mode | With team mode |
+|---|---|
+| An agent's entry is confirmed once the agent verified it (for example by running a test) | It stays `unconfirmed` with the evidence in `Why:`, until a teammate confirms it in the PR review |
+| A rule records `(user, date)` | It records who gave it, `(user: <name>, date)`, and the agent asks whether it is for the whole team or only for that person |
+
+## Security and privacy
+
+**No network access.** The scripts and hooks are plain bash and awk. They make no HTTP requests,
+send no telemetry, and never fetch or push with git; they only read the local repository
+(`git ls-files`, `git log`, `git diff --cached`). The scan strips credentials from the remote URL.
+
+**What reaches the model provider.** The hooks put memory into the agent's context: `index.md`,
+progress and your user memory at the start of a session, and the entries that match each prompt or
+edit. Like any file the agent reads, that context is sent to the model provider (Anthropic, OpenAI…).
+Whether it may be used for training, and how long it is kept, depends on your account and plan
+with that provider, not on this skill: check its privacy settings and terms before using the skill
+on sensitive code. To keep memory out of the context for a session: `export PM_HOOKS=off`.
+
+**Keep memory free of secrets and sensitive data.** Write where a secret lives (`.env` →
+`STRIPE_SECRET_KEY`), never its value. The pre-commit check and `mem.sh lint` catch common token
+formats (cloud and API keys, Stripe, GitHub, GitLab, npm, Slack, SendGrid, private keys,
+`user:password@` in URLs, `PASSWORD=…`); a password written in a plain sentence cannot be detected.
+Prompts captured into `inbox.md` are redacted. Leave customer data, incident details and internal
+hostnames out of memory: in a public repository `.memory/` is public, and in a private one everyone
+with read access sees it.
+
+**Memory and hooks come in through git.** Agents treat memory as information, not as orders, and
+the hooks and `mem.sh lint` flag entries that read like instructions planted for an agent ("ignore
+previous instructions", "don't tell the user"). The hook scripts in `.agents/skills/project-memory/`
+run on every teammate's machine, like any project hook. Have the changes reviewed: for example, in
+`.github/CODEOWNERS`:
+
+    /.memory/                          @your-org/maintainers
+    /.agents/skills/project-memory/    @your-org/maintainers
+    /.claude/settings.json             @your-org/maintainers
+    /.codex/hooks.json                 @your-org/maintainers
 
 ## License
 

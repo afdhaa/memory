@@ -44,10 +44,13 @@ haslock() { [ -f "$1" ] || [ -f "$ROOT/$1" ]; }   # lock files may live at the m
 known() { # known "<file…>" "name:Display …" → "Display, Display"
   local text; text="$(cat $1 2>/dev/null | lower)"
   printf '%s\n' "$2" | tr ' ' '\n' | while IFS=: read -r k v; do
+    [ "$k" = "${SELF:-}" ] && continue   # the project itself (Django's own pyproject lists django)
     printf '%s\n' "$text" | grep -qE "(^|[^a-z0-9_.-])$k([^a-z0-9_-]|$)" && printf '%s\n' "${v//_/ }"; done | awk '!s[$0]++' | join ', '
 }
 # detect_stack: stack and commands of the project in the current directory (root, then each sub-package)
 detect_stack() {
+# the package's own name, so it is not reported as its own dependency
+SELF="$({ sed -n 's/^name[[:space:]]*=[[:space:]]*["'"'"']\([^"'"'"']*\).*/\1/p' pyproject.toml Cargo.toml 2>/dev/null; sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' package.json 2>/dev/null; } | head -n1 | lower)"
 # ---- Node / JS ----
 PM=""; RUN=""
 if has package.json; then
@@ -55,10 +58,10 @@ if has package.json; then
   if haslock pnpm-lock.yaml; then PM=pnpm; RUN="pnpm"; elif haslock yarn.lock; then PM=yarn; RUN="yarn"
   elif haslock bun.lockb || haslock bun.lock; then PM=bun; RUN="bun run"; else PM=npm; RUN="npm run"; fi
   case "$(printf '%s\n' "$PKG" | awk -F'\t' '$1 == "packageManager" { print $3 }')" in pnpm*) PM=pnpm; RUN=pnpm;; yarn*) PM=yarn; RUN=yarn;; esac
-  FW="$(printf '%s\n' "$PKG" | awk -F'\t' '
+  FW="$(printf '%s\n' "$PKG" | awk -F'\t' -v self="$SELF" '
     BEGIN { n = split("next:Next.js nuxt:Nuxt react:React react-native:React_Native expo:Expo vue:Vue svelte:Svelte @sveltejs/kit:SvelteKit @angular/core:Angular solid-js:Solid astro:Astro @remix-run/react:Remix electron:Electron express:Express fastify:Fastify @nestjs/core:NestJS hono:Hono koa:Koa @trpc/server:tRPC graphql:GraphQL socket.io:Socket.IO prisma:Prisma @prisma/client:Prisma drizzle-orm:Drizzle mongoose:Mongoose sequelize:Sequelize typeorm:TypeORM @supabase/supabase-js:Supabase firebase:Firebase tailwindcss:Tailwind @reduxjs/toolkit:Redux zustand:Zustand @tanstack/react-query:TanStack_Query zod:Zod vite:Vite webpack:webpack typescript:TypeScript turbo:Turborepo nx:Nx jest:Jest vitest:Vitest mocha:Mocha @playwright/test:Playwright cypress:Cypress storybook:Storybook eslint:ESLint @biomejs/biome:Biome prettier:Prettier", P, " ")
             for (i = 1; i <= n; i++) { split(P[i], kv, ":"); ORD[i] = kv[1]; NAME[kv[1]] = kv[2] } }
-    $1 ~ /ependencies$/ && ($2 in NAME) && !($2 in V) { v = $3; gsub(/^[\^~>=< ]+/, "", v); V[$2] = v }
+    $1 ~ /ependencies$/ && ($2 in NAME) && !($2 in V) && $2 != self { v = $3; gsub(/^[\^~>=< ]+/, "", v); sub(/[[:space:]|].*/, "", v); V[$2] = v }
     END { for (i = 1; i <= n; i++) if (ORD[i] in V) { nm = NAME[ORD[i]]; gsub(/_/, " ", nm); if (seen[nm]++) continue
             v = V[ORD[i]]; print nm ((v ~ /^[0-9]/) ? " " v : "") } }' | join ', ')"
   STACK="${STACK}- Node.js ($PM)${FW:+ — $FW}"$'\n'
@@ -91,6 +94,7 @@ if [ -n "$PYFILES" ]; then
   STACK="${STACK}- Python ($tool)${fw:+ — $fw}"$'\n'
   has .python-version && STACK="${STACK}- Python version: $(head -n1 .python-version)"$'\n'
   pr=""; case "$tool" in uv) pr="uv run ";; Poetry) pr="poetry run ";; PDM) pr="pdm run ";; Pipenv) pr="pipenv run ";; esac
+  has tests/runtests.py && CMDS="${CMDS}- \`${pr}python tests/runtests.py\` — the project's own test runner (\`tests/runtests.py\`)"$'\n' && FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`${pr}python tests/runtests.py\`"
   has manage.py && CMDS="${CMDS}- \`${pr}python manage.py runserver\` · \`${pr}python manage.py migrate\` — (Django)"$'\n'
   # Poe the Poet tasks ([tool.poe.tasks]) are often the real entry points
   if has pyproject.toml && grep -q '^\[tool\.poe\.tasks' pyproject.toml; then
@@ -137,7 +141,11 @@ detect_stack
 # ---- sub-packages (monorepos): manifests one or two folders deep ----
 PLAIN=""
 SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs)$' |
-  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|fixtures?|tests?|__tests__|e2e|docs?)/' | sed 's#/[^/]*$##' | awk '!s[$0]++' | head -n 8)"
+  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|samples?|fixtures?|tests?|__tests__|e2e|docs?|bench(mark)?s?|benchmark-apps|playgrounds?|templates?|\.[^/]+)/' | sed 's#/[^/]*$##' | awk '!s[$0]++')"
+# the 8 largest packages (by files), not the first 8 alphabetically: in big monorepos those are the ones people work in
+SUBDIRS="$(printf '%s\n' "$FILES" | C="$SUBDIRS" awk -F/ 'BEGIN { n = split(ENVIRON["C"], L, "\n"); for (i = 1; i <= n; i++) if (L[i] != "") W[L[i]] = 1 }
+  NF > 1 { if ($1 in W) c[$1]++; if (NF > 2 && (($1 "/" $2) in W)) c[$1 "/" $2]++ }
+  END { for (d in W) print c[d] + 0 "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | head -n 8 | cut -f2)"
 while IFS= read -r d; do
   [ -n "$d" ] || continue
   sub="$(cd "$d" && SUBPKG=1 && STACK="" && CMDS="" && FACT_CMDS="" && detect_stack && { printf '%s\n' "$STACK" | grep -vE '^$|^- (Workspaces|Node version|Python version)'; echo "@@"; printf '%s\n' "$CMDS" | grep -v '^$' | head -n 8; })"
@@ -223,11 +231,12 @@ TESTS="$(printf '%s\n' "$FILES" | grep -E '(^|/)(tests?|__tests__|spec|e2e)/|[._
 NTESTS="$(printf '%s\n' "$TESTS" | grep -c .)"
 TEST_DIRS="$(printf '%s\n' "$TESTS" | awk -F/ 'NF { k = (NF > 1) ? $1 "/" : "(root)"; c[k]++ } END { for (k in c) print c[k] "\t" k }' |
   sort -t"$TAB" -k1,1nr -k2,2 | head -n 5 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
-DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|mdx|rst))$' | grep -viE '^(license|licence|code_of_conduct|changelog|release-notes|history)' |
-  while IFS= read -r f; do   # skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
+DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|mdx|rst))$' | grep -viE '^(license|licence|code_of_conduct|changelog|release-notes|history|cla|dco|security|support|governance|maintainers)[._-]' |
+  while IFS= read -r f; do
+    case "$f" in AGENTS.md|CLAUDE.md|GEMINI.md) [ -L "$f" ] && continue ;; esac   # CLAUDE.md -> AGENTS.md: listed once   # skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
     awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ && !/^[[:space:]]*@\.?\/?AGENTS\.md[[:space:]]*$/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
   done | awk '{ k = (tolower($0) ~ /^readme/) ? 0 : 1; print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 | cut -f2 | head -n 8 | sed 's/.*/`&`/' | join ', ')"
-nd="$(printf '%s\n' "$FILES" | grep -cE '^docs?/.*\.(md|mdx|rst)$')"; [ "$nd" -gt 0 ] && DOCS="${DOCS:+$DOCS, }\`docs/\` ($nd pages)"
+nd="$(printf '%s\n' "$FILES" | grep -cE '^docs?/.*\.(md|mdx|rst|txt|adoc)$')"; [ "$nd" -gt 0 ] && DOCS="${DOCS:+$DOCS, }\`docs/\` ($nd pages)"
 # agent instructions scoped to a folder (frontend/AGENTS.md…) apply to everything below it
 SCOPED="$(printf '%s\n' "$FILES" | grep -E '^[^/].*/(AGENTS|CLAUDE)\.md$' | grep -vE '(^|/)(node_modules|vendor)/' | head -n 8 | sed 's/.*/`&`/' | join ', ')"
 [ -n "$SCOPED" ] && DOCS="${DOCS:+$DOCS; }agent instructions for sub-folders: $SCOPED"
@@ -262,7 +271,7 @@ if [ -n "$README_F" ]; then
     { p = p (p != "" ? " " : "") $0; pl++ }
     END { if (found == "") emit(); gsub(/[[:space:]]+/, " ", found); print title; print found }' "$README_F" |
     sed -E 's/\[!\[[^]]*\]\([^)]*\)\]\([^)]*\)//g; s/!\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]*)\]\([^)]*\)/\1/g; s/\*\*([^*]+)\*\*/\1/g; s/__([^_]+)__/\1/g
-      s/<[^>]*>/ /g; s/&nbsp;|&[a-z]+;/ /g; s/[[:space:]]+/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//')"
+      s/\|[A-Za-z][^|]{0,40}\|_{0,2}//g; s/<[^>]*>/ /g; s/&nbsp;|&[a-z]+;/ /g; s/[[:space:]]+/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//')"
   TITLE="$(printf '%s\n' "$R" | sed -n 1p | clip 80)"; README_SUM="$(printf '%s\n' "$R" | sed -n 2p | clip 320)"
   [ "$(printf '%s' "$README_SUM" | tr -cs 'A-Za-z' ' ' | wc -w)" -ge 4 ] || README_SUM=""   # "&nbsp;", a lone link…
 fi
@@ -277,7 +286,10 @@ GIT=""; ACTIVE=""
 if [ -n "$IS_GIT" ] && [ -n "$HEAD_SHA" ]; then
   remote="$(git remote get-url origin 2>/dev/null | sed -E 's#://[^@/]+@#://#')"
   GIT="It is versioned with git: branch \`$(git rev-parse --abbrev-ref HEAD)\`, $(git rev-list --count HEAD) commits, last commit on $(git log -1 --format=%cs)${remote:+, remote \`$remote\`}."
-  ACTIVE="$(git -c core.quotePath=false log -n 300 --name-only --format= --relative 2>/dev/null | grep -v '^$' | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
+  # leave out the oldest commit in view when it has no parent here (root commit, or the edge of a shallow CI clone):
+  # it lists every file of the repo as changed
+  NACT="$(git rev-list --count HEAD 2>/dev/null || echo 0)"; [ "$NACT" -gt 300 ] && NACT=300 || NACT=$((NACT - 1))
+  [ "$NACT" -gt 0 ] && ACTIVE="$(git -c core.quotePath=false log -n "$NACT" --name-only --format= --relative 2>/dev/null | grep -v '^$' | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp)/' |
     awk -F/ '{ k = (NF > 2) ? $1 "/" $2 "/" : ((NF == 2) ? $1 "/" : $1); c[k]++ } END { for (k in c) print c[k] "\t" k }' |
     sort -t"$TAB" -k1,1nr -k2,2 | while IFS="$TAB" read -r c k; do [ -e "$k" ] && printf '%s\t%s\n' "$c" "$k"; done |
     head -n 8 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
@@ -293,6 +305,13 @@ BODY="$(
   [ -n "$README_SUM" ] && printf 'It describes itself as: "%s"\n' "$README_SUM"
   [ -n "$GIT" ] && printf '%s\n' "$GIT"
   [ -n "$DOCS" ] && printf 'Documentation to read first: %s.\n' "$DOCS"
+  if [ -f "$HERE/changelog.sh" ]; then . "$HERE/changelog.sh"
+    case "$(changelog_info "$ROOT" | cut -f1,2)" in
+      fragments*) printf 'Changes for users are recorded as fragments or release notes in %s, not in a single changelog file.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
+      generated*) printf 'The changelog is generated from commit messages (%s); it is not edited by hand.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
+      file*) printf 'Changes for users are recorded in %s.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
+    esac
+  fi
   sec "Stack" "Languages, frameworks and tools detected from the manifest files (versions are the declared ranges):" "$STACK"
   sec "Commands" "How to run, build and test. Each line gives the command, then what it executes; \"(conventional)\" means the ecosystem default, not a script found in the repo:" "$CMDS"
   sec "Layout" "The largest top-level folders, with their file counts and biggest subfolders:" "$LAYOUT${ROOTF:+
@@ -300,7 +319,7 @@ BODY="$(
   sec "Infrastructure & CI" "How the project is containerised, checked in CI and deployed:" "$INFRA"
   sec "Config & environment" "Configuration comes from environment variables. Only the variable names are listed; values are never read:" "$ENV"
   [ "$NTESTS" -gt 0 ] && sec "Tests" "Where the automated tests live:" "- $NTESTS test files — $TEST_DIRS"
-  [ -n "$ACTIVE" ] && sec "Recently active areas" "Where most changes landed in the last 300 commits (files touched per folder) — a hint of where current work happens:" "- $ACTIVE"
+  [ -n "$ACTIVE" ] && sec "Recently active areas" "Where most changes landed in the last ${NACT:-300} commits (files touched per folder) — a hint of where current work happens:" "- $ACTIVE"
 )"
 [ -n "${SECRET_RE:-}" ] && BODY="$(printf '%s\n' "$BODY" | grep -vE "$SECRET_RE")"
 START="<!-- scan:start · generated by mem.sh scan on $TODAY${HEAD_SHA:+ at commit $HEAD_SHA}; this block is replaced on every scan -->"

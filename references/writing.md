@@ -127,8 +127,8 @@ Short paragraphs or numbered steps describing the flow, naming the key files and
 **If it fails:** ...
 ```
 
-**Progress** (`progress.md`) — rewritten at the end of every task so that someone picking up the
-work tomorrow knows where things stand. Per item: one sentence on what it is and why it matters,
+**Progress** (`progress.md`, personal, not committed) — rewritten at the end of every task so that
+whoever picks up the work tomorrow knows where things stand. Per item: one sentence on what it is and why it matters,
 then the next concrete step, or what it is waiting on and who:
 ```
 ## In progress
