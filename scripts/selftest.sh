@@ -203,7 +203,7 @@ o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
 check "lint flags filler wording, not code spans" 'printf "%s" "$o" | grep -q "\"leverage\", \"robust\"" && ! printf "%s" "$o" | grep -q "\"robust\", \"robust\""' "$o"
 sed '$d' .memory/gotchas.md | sed '$d' > g.tmp && mv g.tmp .memory/gotchas.md
 check "bootstrap asks for English memory" 'grep -q "Write memory in English" "$P/AGENTS.md"' "$(cat "$P/AGENTS.md")"
-check "scan: nested layout with subfolders" 'grep -q "^  - .src/app/. — 1 files" .memory/topics/codebase.md' "$(cat .memory/topics/codebase.md)"
+check "scan: layout lists folders, hides one-file subfolders" 'grep -q "^- .src/. — " .memory/topics/codebase.md && ! grep -q "^  - .src/app/. — 1 files" .memory/topics/codebase.md' "$(cat .memory/topics/codebase.md)"
 check ".memory/README.md created, not used as memory" '[ -f .memory/README.md ] && ! bash "$SRC/scripts/mem.sh" search pull requests reviewed | grep -q README' "$(bash "$SRC/scripts/mem.sh" search pull requests reviewed)"
 printf '1. **[2020-01-01] Old unconfirmed cache lesson** #cache (agent, seen: 1, unconfirmed)\n   Do instead: clear the cache.\n1. **[%s] Fresh unconfirmed queue lesson** #queue @src/app/ (agent, seen: 1, unconfirmed)\n   Do instead: drain the queue.\n' "$(date +%Y-%m-%d)" >> .memory/gotchas.md
 o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"
@@ -239,6 +239,34 @@ check "scan: Key facts skip image folders and show sub-package stacks" '! grep "
 printf -- '- Check the entries in gotchas.md (gotchas.md, unconfirmed) tomorrow.\n' >> .memory/progress.md
 o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"; check "review ignores prose that mentions \"unconfirmed\"" '! printf "%s" "$o" | grep -q "progress.md"' "$o"
 o="$(bash "$SRC/scripts/mem.sh" search fastapi 2>&1)"; check "search skips the generated scan block" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"
+cd "$S"
+
+
+echo "• production repos (agent docs, many scripts)"
+K="$TMP/prod-app"; mkdir -p "$K" && cd "$K" && git init -q && git config user.email t@t && git config user.name t
+printf '# Team rules\n- Run make check before pushing.\n' > AGENTS.md
+printf '# prod [![CI](ci.svg)](ci) ![Coverage](cov.svg)\n\nA production service that syncs product data between the shop and the warehouse.\n' > README.md
+printf '{"name":"prod","scripts":{"postinstall":"x","prebuild":"y","build":"tsc","zeta":"z","dev":"vite","old":"echo \\"old has been removed\\""}}\n' > package.json
+git add -A && git commit -qm init && bash "$SRC/scripts/install.sh" >/dev/null 2>&1
+check "CLAUDE.md imports an existing AGENTS.md" '[ "$(cat CLAUDE.md)" = "@AGENTS.md" ] && grep -q "Run make check" AGENTS.md && [ "$(grep -c project-memory:start AGENTS.md)" = 1 ]' "$(cat CLAUDE.md)"
+cb="$(cat .memory/topics/codebase.md)"
+check "scan: badges dropped from the title" 'printf "%s" "$cb" | grep -q "^\*\*prod-app\*\* (prod) has"' "$(printf "%s" "$cb" | grep -m1 "^\*\*")"
+check "scan: important scripts first, lifecycle and stub scripts skipped" '[ "$(printf "%s\n" "$cb" | grep -m1 "npm run")" = "- \`npm run dev\` — vite" ] && ! printf "%s" "$cb" | grep -qE "npm run (postinstall|prebuild|old)"' "$(printf "%s\n" "$cb" | grep "npm run")"
+rm CLAUDE.md && ln -s AGENTS.md CLAUDE.md && bash "$SRC/scripts/install.sh" >/dev/null 2>&1
+check "CLAUDE.md symlink left alone" '[ -L CLAUDE.md ] && [ "$(grep -c project-memory:start AGENTS.md)" = 1 ]'
+cd "$S"
+
+
+echo "• @path patterns, shared memory not ignored"
+G="$TMP/glob-app"; mkdir -p "$G/app/product/migrations" "$G/app/order/migrations" && cd "$G" && git init -q && git config user.email t@t && git config user.name t
+touch app/product/migrations/0001.py app/order/migrations/0002.py app/product/models.py; printf '.*\n' > .gitignore
+git add -A && git commit -qm init && bash "$SRC/scripts/install.sh" >/dev/null 2>&1
+check "installer re-includes .memory/ hidden by a broad ignore rule" '! git check-ignore -q .memory/index.md && git check-ignore -q .memory/local.md' "$(cat .gitignore)"
+printf -- '- 2026-10-21 · Never edit an existing migration; add a new one. #migrations @app/*/migrations/ #hold (user)\n- 2026-10-21 · Old pattern. @lib/*/gone/ (user)\n' >> .memory/decisions.md
+check "@path with * matches every folder level" 'bash "$SRC/scripts/mem.sh" path app/order/migrations/0002.py | grep -q "Never edit" && ! bash "$SRC/scripts/mem.sh" path app/product/models.py | grep -q "Never edit"'
+o="$(printf '{"session_id":"%s-gl","cwd":"%s","tool_input":{"file_path":"%s/app/product/migrations/0001.py"}}' "$RUN" "$G" "$G" | bash "$SRC/hooks/pm-hook.sh" pre-edit claude)"
+check "#hold on a @path pattern asks before the edit" 'printf "%s" "$o" | grep -q "\"ask\""' "$o"
+o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"; check "lint flags a pattern that matches nothing" 'printf "%s" "$o" | grep -q "lib/\*/gone/, which matches nothing"' "$o"
 cd "$S"
 
 echo "• edge cases"

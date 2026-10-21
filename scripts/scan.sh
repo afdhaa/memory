@@ -66,7 +66,19 @@ if has package.json; then
   [ -n "$node_ver" ] && STACK="${STACK}- Node version (engines): $node_ver"$'\n'
   ws="$(printf '%s\n' "$PKG" | awk -F'\t' '$1 == "workspaces" && $3 !~ /^[{[]/ { print $3 }' | join ', ')"
   [ -n "$ws" ] && STACK="${STACK}- Workspaces: $ws"$'\n'
-  CMDS="${CMDS}$(printf '%s\n' "$PKG" | awk -F'\t' -v run="$RUN" '$1 == "scripts" && n++ < 25 { print "- `" run " " $2 "` — " $3 }' | clip 120)"$'\n'
+  CMDS="${CMDS}$(printf '%s\n' "$PKG" | awk -F'\t' -v run="$RUN" -v insub="${SUBPKG:-}" '
+    $1 == "scripts" { N[++n] = $2; V[$2] = $3 }
+    END { split("dev start build test lint typecheck format", P, " "); for (i in P) prio[P[i]] = i
+      split("prepare install preinstall postinstall prepublish prepublishOnly prepack postpack", L, " "); for (i in L) life[L[i]] = 1
+      max = insub ? 3 : 12
+      for (i = 1; i <= n; i++) { k = N[i]
+        if ((k in life) || (k ~ /^pre/ && (substr(k, 4) in V)) || (k ~ /^post/ && (substr(k, 5) in V))) continue
+        if (tolower(V[k]) ~ /(has been|was) (removed|deprecated)|no longer (used|supported)/) continue   # stub that only prints a notice
+        if (insub && !(k in prio)) continue
+        O[++m] = ((k in prio) ? prio[k] : 100 + i) "\t" k }
+      for (i = 1; i <= m; i++) for (j = i + 1; j <= m; j++) { split(O[i], a, "\t"); split(O[j], b, "\t"); if (b[1] + 0 < a[1] + 0) { t = O[i]; O[i] = O[j]; O[j] = t } }
+      for (i = 1; i <= m && i <= max; i++) { split(O[i], a, "\t"); print "- `" run " " a[2] "` — " V[a[2]] }
+      if (m > max) print "- … " (m - max) " more script(s) in package.json" }' | clip 120)"$'\n'
   FACT_CMDS="$(printf '%s\n' "$PKG" | awk -F'\t' -v run="$RUN" '$1 == "scripts" { S[$2] = 1 }
     END { n = split("dev start build test lint typecheck", W, " "); for (i = 1; i <= n; i++) if (W[i] in S) print "`" run " " W[i] "`" }' | join ' · ')"
 fi
@@ -75,28 +87,37 @@ fi
 PYFILES="$(ls pyproject.toml setup.py setup.cfg Pipfile requirements*.txt 2>/dev/null | tr '\n' ' ')"
 if [ -n "$PYFILES" ]; then
   tool=pip; haslock uv.lock && tool=uv; haslock poetry.lock && tool=Poetry; haslock Pipfile.lock && tool=Pipenv; haslock pdm.lock && tool=PDM
-  fw="$(known "$PYFILES" "django:Django flask:Flask fastapi:FastAPI starlette:Starlette pydantic:Pydantic sqlalchemy:SQLAlchemy sqlmodel:SQLModel alembic:Alembic celery:Celery pytest:pytest numpy:NumPy pandas:pandas scikit-learn:scikit-learn torch:PyTorch tensorflow:TensorFlow transformers:Transformers langchain:LangChain requests:requests httpx:httpx streamlit:Streamlit uvicorn:Uvicorn gunicorn:Gunicorn ruff:Ruff mypy:mypy")"
+  fw="$(known "$PYFILES" "django:Django flask:Flask fastapi:FastAPI starlette:Starlette pydantic:Pydantic sqlalchemy:SQLAlchemy sqlmodel:SQLModel alembic:Alembic graphene:Graphene strawberry-graphql:Strawberry ariadne:Ariadne celery:Celery pytest:pytest numpy:NumPy pandas:pandas scikit-learn:scikit-learn torch:PyTorch tensorflow:TensorFlow transformers:Transformers langchain:LangChain requests:requests httpx:httpx streamlit:Streamlit uvicorn:Uvicorn gunicorn:Gunicorn ruff:Ruff mypy:mypy")"
   STACK="${STACK}- Python ($tool)${fw:+ — $fw}"$'\n'
   has .python-version && STACK="${STACK}- Python version: $(head -n1 .python-version)"$'\n'
-  case "$fw" in *pytest*) CMDS="${CMDS}- \`pytest\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`pytest\`";; esac
+  pr=""; case "$tool" in uv) pr="uv run ";; Poetry) pr="poetry run ";; PDM) pr="pdm run ";; Pipenv) pr="pipenv run ";; esac
+  has manage.py && CMDS="${CMDS}- \`${pr}python manage.py runserver\` · \`${pr}python manage.py migrate\` — (Django)"$'\n'
+  # Poe the Poet tasks ([tool.poe.tasks]) are often the real entry points
+  if has pyproject.toml && grep -q '^\[tool\.poe\.tasks' pyproject.toml; then
+    poe="$(awk '/^\[tool\.poe\.tasks\]/ { on = 1; next } /^\[tool\.poe\.tasks\./ { t = $0; sub(/^\[tool\.poe\.tasks\./, "", t); sub(/\].*/, "", t); print t; on = 0; next }
+      /^\[/ { on = 0 } on && /^"?[A-Za-z0-9_-]+"?(\.[A-Za-z_]+)?[[:space:]]*=/ { t = $0; sub(/[[:space:]]*=.*/, "", t); sub(/\..*/, "", t); gsub(/"/, "", t); print t }' pyproject.toml | awk '!s[$0]++' | head -n 12 | sed "s/.*/\`${pr}poe &\`/" | join ' · ')"
+    [ -n "$poe" ] && CMDS="${CMDS}- Poe tasks: $poe"$'\n'
+    case "$poe" in *"poe test\`"*) FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`${pr}poe test\`";; esac
+  fi
+  case "$fw" in *pytest*) CMDS="${CMDS}- \`${pr}pytest\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`${pr}pytest\`";; esac
 fi
 if has go.mod; then
   mod="$(awk '$1 == "module" { print $2; exit }' go.mod)"; gov="$(awk '$1 == "go" { print $2; exit }' go.mod)"
   fw="$(known go.mod "gin-gonic/gin:Gin labstack/echo:Echo gofiber/fiber:Fiber go-chi/chi:chi gorm.io/gorm:GORM spf13/cobra:Cobra google.golang.org/grpc:gRPC")"
   STACK="${STACK}- Go ${gov} — module \`$mod\`${fw:+ — $fw}"$'\n'
-  CMDS="${CMDS}- \`go build ./...\` · \`go test ./...\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`go test ./...\`"
+  [ -z "${SUBPKG:-}" ] && CMDS="${CMDS}- \`go build ./...\` · \`go test ./...\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`go test ./...\`"
 fi
 if has Cargo.toml; then
   fw="$(known Cargo.toml "tokio:Tokio axum:axum actix-web:actix-web rocket:Rocket serde:serde clap:clap sqlx:SQLx diesel:Diesel tauri:Tauri")"
   ws=""; grep -q '^\[workspace\]' Cargo.toml && ws=" (workspace)"
   STACK="${STACK}- Rust / Cargo${ws}${fw:+ — $fw}"$'\n'
-  CMDS="${CMDS}- \`cargo build\` · \`cargo test\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`cargo test\`"
+  [ -z "${SUBPKG:-}" ] && CMDS="${CMDS}- \`cargo build\` · \`cargo test\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`cargo test\`"
 fi
 if has composer.json; then
   CP="$(jget composer.json "require require-dev scripts")"
   fw="$(printf '%s\n' "$CP" | awk -F'\t' '$1 ~ /^require/ { print $2 }' | awk '{ n = split("laravel/framework:Laravel symfony/framework-bundle:Symfony slim/slim:Slim phpunit/phpunit:PHPUnit pestphp/pest:Pest", P, " "); for (i = 1; i <= n; i++) { split(P[i], kv, ":"); if ($0 == kv[1]) print kv[2] } }' | join ', ')"
   STACK="${STACK}- PHP (Composer)${fw:+ — $fw}"$'\n'
-  CMDS="${CMDS}$(printf '%s\n' "$CP" | awk -F'\t' '$1 == "scripts" && n++ < 15 { print "- `composer run " $2 "` — " $3 }' | clip 120)"$'\n'
+  CMDS="${CMDS}$(printf '%s\n' "$CP" | awk -F'\t' '$1 == "scripts" && $2 !~ /^(pre|post)-/ && n++ < 10 { print "- `composer run " $2 "` — " $3 }' | clip 120)"$'\n'
   has artisan && CMDS="${CMDS}- \`php artisan serve\` · \`php artisan test\` — (Laravel)"$'\n'
 fi
 if has Gemfile; then fw="$(known Gemfile "rails:Rails sinatra:Sinatra rspec:RSpec sidekiq:Sidekiq")"; STACK="${STACK}- Ruby (Bundler)${fw:+ — $fw}"$'\n'; fi
@@ -114,18 +135,23 @@ STACK=""; CMDS=""; FACT_CMDS=""
 detect_stack
 
 # ---- sub-packages (monorepos): manifests one or two folders deep ----
+PLAIN=""
 SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs)$' |
   grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|fixtures?|tests?|__tests__|e2e|docs?)/' | sed 's#/[^/]*$##' | awk '!s[$0]++' | head -n 8)"
 while IFS= read -r d; do
   [ -n "$d" ] || continue
-  sub="$(cd "$d" && STACK="" && CMDS="" && FACT_CMDS="" && detect_stack && { printf '%s\n' "$STACK" | grep -vE '^$|^- (Workspaces|Node version|Python version)'; echo "@@"; printf '%s\n' "$CMDS" | grep -v '^$' | head -n 8; })"
+  sub="$(cd "$d" && SUBPKG=1 && STACK="" && CMDS="" && FACT_CMDS="" && detect_stack && { printf '%s\n' "$STACK" | grep -vE '^$|^- (Workspaces|Node version|Python version)'; echo "@@"; printf '%s\n' "$CMDS" | grep -v '^$' | head -n 8; })"
   st="$(printf '%s\n' "$sub" | sed '/^@@$/,$d' | sed "s#^- #- $BT$d/$BT — #")"
   cm="$(printf '%s\n' "$sub" | sed '1,/^@@$/d' | sed "s#^- #- (in $BT$d/$BT) #")"
-  [ -n "$st" ] && STACK="${STACK}${st}"$'\n'
+  # no framework found ("- `d/` — Node.js (yarn)"): list it once at the end instead of a line of its own
+  if [ -n "$st" ] && [ "$(printf '%s\n' "$st" | grep -c ' — .* — ')" -eq 0 ] && [ "$(printf '%s\n' "$st" | grep -c .)" -eq 1 ]; then
+    PLAIN="${PLAIN:+$PLAIN, }$BT$d/$BT"
+  elif [ -n "$st" ]; then STACK="${STACK}${st}"$'\n'; fi
   [ -n "$cm" ] && CMDS="${CMDS}${cm}"$'\n'
 done <<EOF
 $SUBDIRS
 EOF
+[ -n "${PLAIN:-}" ] && STACK="${STACK}- Other packages (no framework detected): $PLAIN"$'\n'
 # shell scripts kept in scripts/ folders are usually the real entry points (test.sh, build.sh…)
 SH="$(printf '%s\n' "$FILES" | grep -E '(^|/)scripts/[^/]+\.sh$' | head -n 10 | sed 's/.*/`&`/' | join ', ')"
 [ -n "$SH" ] && CMDS="${CMDS}- Shell scripts: $SH"$'\n'
@@ -171,7 +197,8 @@ for f in .env.example .env.sample .env.template .env.dist .env.local.example exa
   has "$f" || continue
   keys="$(sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/p' "$f" | awk '!s[$0]++')"
   n="$(printf '%s\n' "$keys" | grep -c .)"; ENV_KEYS=$((ENV_KEYS + n)); ENV_EX="${ENV_EX:-$f}"
-  ENV="${ENV}- \`$f\` ($n): $(printf '%s\n' "$keys" | head -n 40 | join ', ')"$'\n'
+  more=""; [ "$n" -gt 15 ] && more=" … (+$((n - 15)) more)"
+  ENV="${ENV}- \`$f\` ($n): $(printf '%s\n' "$keys" | head -n 15 | join ', ')$more"$'\n'
 done
 for f in .env .env.local .env.development .env.production; do
   [ -f "$f" ] || continue
@@ -181,9 +208,9 @@ for f in .env .env.local .env.development .env.production; do
 done
 
 # ---- layout ----
-CHILDREN="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 2 { c[$1 "\t" $2]++ } END { for (k in c) print k "\t" c[k] }' |
+CHILDREN="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 2 { c[$1 "\t" $2]++ } END { for (k in c) if (c[k] > 1) print k "\t" c[k] }' |
   sort -t"$TAB" -k1,1 -k3,3nr -k2,2 | awk -F'\t' 'n[$1]++ < 6')"
-DIRS="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 1 { c[$1]++ } END { for (d in c) print c[d] "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | head -n 15)"
+DIRS="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 1 && ($1 !~ /^\./ || $1 == ".github") { c[$1]++ } END { for (d in c) print c[d] "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | head -n 12)"
 # top-level folders, each followed by its largest subfolders as nested bullets
 LAYOUT="$(printf '%s\n' "$DIRS" | CH="$CHILDREN" awk -F'\t' '
   BEGIN { n = split(ENVIRON["CH"], L, "\n"); for (i = 1; i <= n; i++) { split(L[i], p, "\t"); if (p[1] != "") S[p[1]] = S[p[1]] "  - `" p[1] "/" p[2] "/` — " p[3] " files\n" } }
@@ -198,9 +225,12 @@ TEST_DIRS="$(printf '%s\n' "$TESTS" | awk -F/ 'NF { k = (NF > 1) ? $1 "/" : "(ro
   sort -t"$TAB" -k1,1nr -k2,2 | head -n 5 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
 DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|mdx|rst))$' | grep -viE '^(license|licence|code_of_conduct|changelog|release-notes|history)' |
   while IFS= read -r f; do   # skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
-    awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
+    awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ && !/^[[:space:]]*@\.?\/?AGENTS\.md[[:space:]]*$/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
   done | awk '{ k = (tolower($0) ~ /^readme/) ? 0 : 1; print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 | cut -f2 | head -n 8 | sed 's/.*/`&`/' | join ', ')"
 nd="$(printf '%s\n' "$FILES" | grep -cE '^docs?/.*\.(md|mdx|rst)$')"; [ "$nd" -gt 0 ] && DOCS="${DOCS:+$DOCS, }\`docs/\` ($nd pages)"
+# agent instructions scoped to a folder (frontend/AGENTS.md…) apply to everything below it
+SCOPED="$(printf '%s\n' "$FILES" | grep -E '^[^/].*/(AGENTS|CLAUDE)\.md$' | grep -vE '(^|/)(node_modules|vendor)/' | head -n 8 | sed 's/.*/`&`/' | join ', ')"
+[ -n "$SCOPED" ] && DOCS="${DOCS:+$DOCS; }agent instructions for sub-folders: $SCOPED"
 
 # ---- README summary ----
 README_F=""; for f in README.md readme.md Readme.md README.rst README.txt README; do has "$f" && { README_F="$f"; break; }; done
@@ -209,14 +239,19 @@ if [ -n "$README_F" ]; then
   # title = first "# " or setext "===" heading; summary = first prose or blockquote paragraph that is not a
   # list, a GitHub alert or an intro ending in ":" — looked for only before the second "##" section
   R="$(awk '
-    function emit() { if (p != "" && p !~ /:[[:space:]]*$/ && p !~ /^([-*+]|[0-9]+[.)])[[:space:]]/) found = p; p = ""; pl = 0 }
+    function words(s,  t) { t = s; gsub(/<[^>]*>|&[a-z]+;|\]\([^)]*\)/, " ", t); return gsub(/[A-Za-z][A-Za-z]+/, "&", t) }
+    function emit() { if (p != "" && p !~ /:[[:space:]]*$/ && p !~ /^([-*+]|[0-9]+[.)])[[:space:]]/ && words(p) >= 4) found = p; p = ""; pl = 0 }
     /^[[:space:]]*(```|~~~)/ { emit(); if (found != "") exit; code = !code; next } code { next }
     cm { if (/-->/) cm = 0; next }
     /^[[:space:]]*<!--/ { if (!/-->/) cm = 1; next }
     /^=+[[:space:]]*$/ && p != "" && pl == 1 { if (title == "") title = p; p = ""; pl = 0; next }
     /^-+[[:space:]]*$/ && p != "" && pl == 1 { p = ""; pl = 0; if (++h2 >= 2) exit; next }
     /^#/ { emit(); if (found != "") exit
-           if (title == "" && /^# /) { t = $0; sub(/^# +/, "", t); title = t } else if (/^## / && ++h2 >= 2) exit
+           if (title == "" && /^# /) { t = $0; sub(/^# +/, "", t)
+             # badges and logos in the heading: keep the text; an image-only heading gives its alt text
+             a = t; gsub(/\[!\[[^]]*\]\([^)]*\)\]\([^)]*\)|!\[[^]]*\]\([^)]*\)|<[^>]*>/, "", a); gsub(/^[[:space:]]+|[[:space:]]+$/, "", a)
+             if (a == "" && match(t, /!\[[^]]*\]/)) a = substr(t, RSTART + 2, RLENGTH - 3)
+             title = a } else if (/^## / && ++h2 >= 2) exit
            next }
     /^[[:space:]]*$/ { emit(); if (found != "") exit; next }
     /^>/ { s = $0; sub(/^>[[:space:]]*/, "", s); if (s ~ /^\[!/) { alert = 1; next }
@@ -226,8 +261,10 @@ if [ -n "$README_F" ]; then
     /^[[:space:]]*(<|!\[|\[!\[|\|)/ { emit(); if (found != "") exit; next }
     { p = p (p != "" ? " " : "") $0; pl++ }
     END { if (found == "") emit(); gsub(/[[:space:]]+/, " ", found); print title; print found }' "$README_F" |
-    sed -E 's/!\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]*)\]\([^)]*\)/\1/g; s/\*\*([^*]+)\*\*/\1/g; s/__([^_]+)__/\1/g; s/^[[:space:]]+//')"
+    sed -E 's/\[!\[[^]]*\]\([^)]*\)\]\([^)]*\)//g; s/!\[([^]]*)\]\([^)]*\)/\1/g; s/\[([^]]*)\]\([^)]*\)/\1/g; s/\*\*([^*]+)\*\*/\1/g; s/__([^_]+)__/\1/g
+      s/<[^>]*>/ /g; s/&nbsp;|&[a-z]+;/ /g; s/[[:space:]]+/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//')"
   TITLE="$(printf '%s\n' "$R" | sed -n 1p | clip 80)"; README_SUM="$(printf '%s\n' "$R" | sed -n 2p | clip 320)"
+  [ "$(printf '%s' "$README_SUM" | tr -cs 'A-Za-z' ' ' | wc -w)" -ge 4 ] || README_SUM=""   # "&nbsp;", a lone link…
 fi
 # no usable README paragraph: fall back to the manifest description
 if [ -z "$README_SUM" ]; then
@@ -251,6 +288,7 @@ fi
 sec() { [ -n "$(printf '%s' "$3" | tr -d '[:space:]')" ] && printf '\n### %s\n%s\n%s\n' "$1" "$2" "$(printf '%s\n' "$3" | grep -v '^$')"; }
 BODY="$(
   printf '### Overview\n'
+  [ "$(printf '%s' "$TITLE" | tr 'A-Z' 'a-z')" = "$(basename "$ROOT" | tr 'A-Z' 'a-z')" ] && TITLE=""
   printf '**%s**%s has %s files%s.\n' "$(basename "$ROOT")" "${TITLE:+ ("$TITLE")}" "$NFILES" "${LANG_LINE:+ — by language: $LANG_LINE}"
   [ -n "$README_SUM" ] && printf 'It describes itself as: "%s"\n' "$README_SUM"
   [ -n "$GIT" ] && printf '%s\n' "$GIT"

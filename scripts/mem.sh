@@ -63,7 +63,7 @@ relpath() {
   printf '%s' "$a"
 }
 # @path tag: letters, digits, _ . / - and the ( ) [ ] used by route folders such as app/[id]/ or app/(auth)/
-export PM_TAG_RE='(^|[ 	(])@[A-Za-z0-9_.]([A-Za-z0-9_./()-]|\[|\])*'
+export PM_TAG_RE='(^|[ 	(])@[A-Za-z0-9_.*]([A-Za-z0-9_./()*-]|\[|\])*'
 
 cmd="${1:-help}"; shift || true
 case "$cmd" in
@@ -76,17 +76,24 @@ search)
     /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated facts: read codebase.md instead
     /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
     /^[[:space:]]*$/ || /^>/ { next }
+    /^#+ / && NF <= 4 { next }   # bare headings ("## Notes") are not answers
     { l = tolower($0); s = 0
       for (i = 1; i <= n; i++) if (W[i] != "" && index(l, W[i])) s++
       f = FILENAME; if (index(f, home) == 1) f = "~" substr(f, length(home) + 1)
       t = $0; if (length(t) > 220) t = substr(t, 1, 220) "…"
-      if (s) printf "%d\t%s:%d: %s\n", s, f, FNR, t }' ${S[@]+"${S[@]}"} /dev/null \
-  | sort -t"$(printf '\t')" -k1,1nr -s | head -n "${PM_SEARCH_LIMIT:-12}" | cut -f2-
+      if (s) printf "%d\t%d\t%s:%d: %s\n", s, length($0), f, FNR, t }' ${S[@]+"${S[@]}"} /dev/null \
+  | sort -t"$(printf '\t')" -k1,1nr -k2,2n | awk -F'\t' -v n="$#" '
+      # a long paragraph matches one word of almost any query: with 3+ words, keep one-word hits only as filler
+      { L[++c] = $0; if ($1 >= 2) strong++ } END { for (i = 1; i <= c; i++) { split(L[i], a, "\t"); if (n < 3 || a[1] >= 2 || strong < 3) print L[i] } }' \
+  | head -n "${PM_SEARCH_LIMIT:-12}" | cut -f3-
   ;;
 path)
   [ $# -gt 0 ] || { echo "usage: mem.sh path <file-or-dir>"; exit 1; }
   p="$(relpath "$1")"; p="${p%/}"
   awk -v p="$p" '
+    function pm_hit(p, t,  re) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
+      re = t; gsub(/[][.+?^${}()|\\]/, "\\\\&", re); gsub(/\*\*/, "\001", re); gsub(/\*/, "[^/]*", re); gsub(/\001/, ".*", re)
+      return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
     BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
     FNR == 1 { gen = 0 }
     /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags
@@ -96,7 +103,7 @@ path)
         while (tag ~ /\)$/ && gsub(/\(/, "(", tag) < gsub(/\)/, ")", tag)) { tag = substr(tag, 1, length(tag) - 1); sub(/[.,;:]+$/, "", tag) }
         sub(/\/$/, "", tag)
         line = substr(line, RSTART + RLENGTH)
-        if (p == tag || index(p, tag "/") == 1 || index(tag, p "/") == 1) { t = $0; if (length(t) > 220) t = substr(t, 1, 220) "…"; print FILENAME ":" FNR ": " t; next }
+        if (pm_hit(p, tag) || index(tag, p "/") == 1) { t = $0; if (length(t) > 220) t = substr(t, 1, 220) "…"; print FILENAME ":" FNR ": " t; next }
       } }' ${FILES[@]+"${FILES[@]}"} /dev/null
   ;;
 secrets)
@@ -138,7 +145,10 @@ lint)
   while IFS= read -r m; do w "entry without date: $m"; done < <(grep -nE '^(- |[0-9]+\. )' .memory/decisions.md .memory/gotchas.md 2>/dev/null | grep -vE '[0-9]{4}-[0-9]{2}-[0-9]{2}|superseded' | head -n 10)
   # @paths that no longer exist (renamed/deleted code → memory may be wrong)
   while IFS=$'\t' read -r loc tag; do
-    [ -e "$ROOT/${tag%/}" ] || w "$loc refers to @$tag, which no longer exists → update the path or retire the entry"
+    case "$tag" in
+      *'*'*) ( shopt -s nullglob globstar 2>/dev/null; m=( "$ROOT"/${tag%/} ); [ ${#m[@]} -gt 0 ] ) || w "$loc refers to @$tag, which matches nothing any more → update the pattern or retire the entry" ;;
+      *) [ -e "$ROOT/${tag%/}" ] || w "$loc refers to @$tag, which no longer exists → update the path or retire the entry" ;;
+    esac
   done < <(awk 'BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
       FNR == 1 { inc = 0; gen = 0 }
       /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
@@ -206,7 +216,16 @@ lint)
   if git rev-parse --git-dir >/dev/null 2>&1; then
     for f in .memory/local.md .memory/inbox.md .memory/.stats.tsv .memory/.approvals; do
       [ -e "$f" ] && ! git check-ignore -q "$f" && w "$f is NOT gitignored"; done
+    # …and the shared files must NOT be ignored, or the team never gets them
+    for f in .memory/index.md .memory/decisions.md .memory/gotchas.md; do
+      [ -e "$f" ] && git check-ignore -q --no-index "$f" && { w ".memory/ is gitignored ($f), so it never reaches the team → add !.memory/ to .gitignore"; break; }; done
   fi
+  # onboarding not finished: sections the agent should write after a scan
+  empty_sec() { awk -v h="## $2" '/^## /{ on = ($0 == h); if (on) seen = 1; next } on && /^[[:space:]]*<!--/ { c = !/-->/; next }
+    on && c { if (/-->/) c = 0; next } on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }' "$1" 2>/dev/null; }
+  todo=""; empty_sec .memory/index.md "Project summary" && todo="Project summary (index.md)"
+  for h in "How it fits together" "Project layout"; do empty_sec .memory/topics/codebase.md "$h" && todo="${todo:+$todo, }\"$h\" (topics/codebase.md)"; done
+  [ -n "$todo" ] && echo "ℹ still empty: $todo — write them from the scan and the code"
   [ -f "$USER_MEM" ] || echo "ℹ user memory not found at ${USER_MEM/#$HOME/~} (set PM_USER_MEMORY, or run the installer to create it)"
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
   [ "$issues" -eq 0 ]
@@ -260,7 +279,7 @@ scan)
   ;;
 stats)
   for f in ${FILES[@]+"${FILES[@]}"}; do
-    printf '%5s lines  %4s entries  %s\n' "$(wc -l < "$f" | tr -d ' ')" "$(grep -cE '^(- |[0-9]+\. |### )' "$f")" "$f"; done
+    printf '%5s lines  %4s entries  %s\n' "$(wc -l < "$f" | tr -d ' ')" "$(awk '/^[[:space:]]*<!--/ { c = 1 } c { if (/-->/) c = 0; next } /^<!-- scan:start/,/^<!-- scan:end/ { next } /^(- |[0-9]+\. |### )/ { n++ } END { print n + 0 }' "$f")" "$f"; done
   [ -f .memory/.stats.tsv ] && echo "hook injections recorded: $(wc -l < .memory/.stats.tsv | tr -d ' ') (last: $(tail -n1 .memory/.stats.tsv | cut -f1))"
   [ -f "$USER_MEM" ] && echo "user memory: $USER_MEM ($(wc -l < "$USER_MEM" | tr -d ' ') lines)"
   ;;

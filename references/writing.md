@@ -1,6 +1,7 @@
 # Writing memory — full guide
 
-Read this once per session before you write or rewrite memory. SKILL.md has the short version.
+SKILL.md has the short version, enough for one-line entries and rules. Read this file before you
+write topics, procedures, `codebase.md` sections or `progress.md`, or when unsure how to phrase something.
 
 Memory is read by people (teammates reviewing `.memory/` in a PR, the user checking what you
 know) as much as by agents. An entry that only its author can decode is worthless next month.

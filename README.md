@@ -1,4 +1,4 @@
-# project-memory v3.9
+# project-memory v3.10
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -23,7 +23,7 @@ What it creates:
 | `.agents/skills/project-memory/` | copy of the skill (read by Codex, OpenCode, Antigravity, omp) |
 | `.claude/skills/project-memory` | symlink to the copy above (Claude Code) |
 | `.memory/` | project memory from the templates, scanned right away (see §2); `.memory/README.md` explains each file to teammates |
-| `AGENTS.md`, `CLAUDE.md` | a short instruction block between `<!-- project-memory:start/end -->` |
+| `AGENTS.md`, `CLAUDE.md` | a short instruction block between `<!-- project-memory:start/end -->` in `AGENTS.md`; a new `CLAUDE.md` just imports it (`@AGENTS.md`), so Claude Code also sees your project's own AGENTS.md. An existing `CLAUDE.md` gets the block too; a symlink is left alone. |
 | `.claude/settings.json`, `.codex/hooks.json` | automatic hooks (see §3) |
 | `.gitignore`, `.gitattributes`, pre-commit | keeps personal files out of git, merges without conflicts, blocks leaked tokens |
 | `~/.agents/memory/user.md` | personal memory for all projects (created if missing) |
@@ -59,7 +59,7 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 102 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs 110 automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).
@@ -91,7 +91,7 @@ your-project/
 ├── .claude/skills/project-memory    # symlink to the skill, for Claude Code
 ├── .claude/settings.json       # Claude Code hooks
 ├── .codex/hooks.json           # Codex hooks
-├── AGENTS.md, CLAUDE.md        # a short instruction block for agents
+├── AGENTS.md, CLAUDE.md        # instruction block for agents (CLAUDE.md imports AGENTS.md)
 └── .gitattributes, .gitignore  # merge=union for decisions/gotchas, personal files kept out of git
 
 ~/.agents/memory/user.md        # your personal preferences for every project (not in the repo)
@@ -106,7 +106,8 @@ What an entry looks like:
 ```
 
 - **Title**: the point in one sentence, dated.
-- **`#tags`**: help search; **`@path`**: shows the entry before an agent edits that code.
+- **`#tags`**: help search; **`@path`**: shows the entry before an agent edits that code
+  (patterns work too: `@app/*/migrations/` for one folder level, `@**/schema.graphql` for any depth).
 - **`(user|agent, seen: N)`**: who it came from and how often it came up; `unconfirmed` marks an
   agent's conclusion that nobody has checked yet.
 - **`Why:` / `Do instead:`**: the cause and the concrete fix.

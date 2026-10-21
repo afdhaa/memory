@@ -66,9 +66,9 @@ This project keeps persistent memory in `.memory/` (Markdown, shared by all agen
 - Start of every task: read `.memory/index.md`, `.memory/progress.md` and, if present, `~/.agents/memory/user.md` (skip what a `[project-memory]` message already provided). Triage `.memory/inbox.md` if it has items.
 - For a new request, look for related memory: `bash .agents/skills/project-memory/scripts/mem.sh search <keywords>`.
 - Before editing an area: `bash .agents/skills/project-memory/scripts/mem.sh path <file>`; ask before touching anything tagged `#hold`.
-- While working: record decisions, user corrections and gotchas immediately. Before finishing: update `.memory/progress.md`.
+- While working: record decisions, user corrections and gotchas immediately. When a task changed the state of the work, update `.memory/progress.md`.
 - Write memory in English (unless `.memory/index.md` sets another `Memory language:`), in plain, specific sentences without filler — see the skill's references/writing.md.
-- If `.memory/index.md` Rules or `~/.agents/memory/user.md` say `Memory writes: confirm`, record the user's own instructions and corrections right away, but only propose what you concluded yourself (gotchas, decisions, progress) at the end of the task and write only what the user approves.
+- `Memory writes: confirm` in `.memory/index.md` or user memory: propose your own conclusions at the end of the task and write only what the user approves.
 - Never write secrets into memory.
 <!-- project-memory:end -->
 MD
@@ -176,6 +176,18 @@ fi
 if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   for l in ".memory/local.md" ".memory/inbox.md" ".memory/.stats.tsv" ".memory/.approvals"; do
     add_line_once "$ROOT/.gitignore" "$l" && log "+ .gitignore ($l)"; done
+  # a broad rule such as ".*" would hide the shared memory and the skill from the team: re-include them
+  if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    for d in .memory .agents; do
+      probe="$d/index.md"; [ "$d" = .agents ] && probe=".agents/skills/$NAME/SKILL.md"
+      if git -C "$ROOT" check-ignore -q --no-index "$probe" 2>/dev/null; then
+        add_line_once "$ROOT/.gitignore" "!$d/" && log "+ .gitignore (!$d/ — an existing rule ignored it, so the team would never get it)"
+      fi
+    done
+    for f in .claude/settings.json .codex/hooks.json; do
+      git -C "$ROOT" check-ignore -q --no-index "$f" 2>/dev/null && log "! $f is gitignored: teammates will not get the hooks (re-include it in .gitignore if you want them shared)"
+    done
+  fi
   # team-safe merges: concurrent appends from two branches are combined instead of conflicting
   for l in ".memory/decisions.md merge=union" ".memory/gotchas.md merge=union"; do
     add_line_once "$ROOT/.gitattributes" "$l" && log "+ .gitattributes ($l)"; done
@@ -184,7 +196,28 @@ fi
 ensure_user_memory
 
 upsert_bootstrap "$ROOT/AGENTS.md"
-upsert_bootstrap "$ROOT/CLAUDE.md"
+# CLAUDE.md: Claude Code reads it instead of AGENTS.md
+# repair: installers up to 3.9.0 turned a CLAUDE.md symlink (git mode 120000) into a copy — restore the link
+if [ -f "$ROOT/CLAUDE.md" ] && [ ! -L "$ROOT/CLAUDE.md" ] && git -C "$ROOT" ls-files -s -- CLAUDE.md 2>/dev/null | grep -q '^120000 '; then
+  tgt="$(git -C "$ROOT" cat-file -p ":CLAUDE.md" 2>/dev/null)"
+  strip_block() { awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b' "$1" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'; }
+  if [ -n "$tgt" ] && [ -f "$ROOT/$tgt" ] && [ "$(strip_block "$ROOT/CLAUDE.md")" = "$(strip_block "$ROOT/$tgt")" ]; then
+    rm -f "$ROOT/CLAUDE.md" && ln -s "$tgt" "$ROOT/CLAUDE.md" && log "~ $ROOT/CLAUDE.md (symlink to $tgt restored)"
+  else log "! $ROOT/CLAUDE.md is a symlink in git but a regular file here — check it (git checkout -- CLAUDE.md restores the link)"; fi
+fi
+if [ -L "$ROOT/CLAUDE.md" ]; then
+  log "= CLAUDE.md (symlink to $(readlink "$ROOT/CLAUDE.md"), left as is)"
+elif [ ! -e "$ROOT/CLAUDE.md" ]; then
+  # import AGENTS.md (the project's own instructions + our block) rather than a copy of the block alone
+  printf '@AGENTS.md\n' > "$ROOT/CLAUDE.md"; log "+ $ROOT/CLAUDE.md (imports AGENTS.md)"
+elif grep -qxE '[[:space:]]*@\.?/?AGENTS\.md[[:space:]]*' "$ROOT/CLAUDE.md"; then
+  log "= CLAUDE.md (already imports AGENTS.md)"
+elif ! awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ { o = 1 } END { exit !o }' "$ROOT/CLAUDE.md"; then
+  # an earlier install wrote a CLAUDE.md holding only our block: import AGENTS.md instead
+  printf '@AGENTS.md\n' > "$ROOT/CLAUDE.md"; log "~ $ROOT/CLAUDE.md (now imports AGENTS.md)"
+else
+  upsert_bootstrap "$ROOT/CLAUDE.md"
+fi
 
 if [[ "$HOOKS" == "yes" ]]; then
   merge_hooks "$ROOT/.claude/settings.json" "$SRC/hooks/claude-settings.snippet.json" add

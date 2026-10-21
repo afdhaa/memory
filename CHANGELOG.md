@@ -3,6 +3,23 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.10.0
+Tested on five production repositories (excalidraw, koel, caddy, ripgrep, saleor).
+- Installer: never replaces a `CLAUDE.md` symlink (3.9.0 turned it into a copy) and restores one
+  that an earlier install converted; a new `CLAUDE.md` imports `@AGENTS.md`, so Claude Code also sees
+  the project's own instructions; a broad `.gitignore` rule (`.*`) no longer hides `.memory/` and the
+  skill from the team; warns when hook files are ignored.
+- `@path` patterns: `*` (one folder level) and `**` (any depth), for search, edits, `#hold` and lint.
+- Scan: npm scripts ranked (dev, start, build, test, lint first), lifecycle and "removed" stubs
+  skipped, 12 at the root and 3 per sub-package; packages without a framework collapsed to one line;
+  conventional Go/Rust commands only at the root; Poe tasks and Django `manage.py`; commands run
+  through uv/Poetry/PDM; agent instructions in sub-folders; badges and HTML dropped from the title
+  and summary; tool folders and one-file subfolders left out of the layout; long env lists capped.
+- `mem.sh`: search ranks entries over long paragraphs and skips bare headings; lint warns when
+  `.memory/` is gitignored and notes empty onboarding sections; stats ignores template comments.
+- SKILL.md: the project's own AGENTS.md comes first (no copies, conflicts are asked), mixed-source
+  entries, where evidence goes, Rule placement, when to read `references/writing.md`.
+
 ## 3.9.0
 Tested on three real repositories (Node/Express + Prisma, Go/Gin, FastAPI + React monorepo).
 - Scan: sub-packages of monorepos (`backend/`, `frontend/`…) with their frameworks and commands;

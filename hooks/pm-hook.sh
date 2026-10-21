@@ -38,7 +38,7 @@ redact() { sed -E \
   -e 's/(([Pp][Aa][Ss][Ss]([Ww][Oo][Rr][Dd]|[Ww][Dd])|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn])[[:space:]]*[:=][[:space:]]*)[^[:space:]]{6,}/\1[REDACTED]/g'; }
 
 # @path tag: letters, digits, _ . / - and the ( ) [ ] used by route folders such as app/[id]/ or app/(auth)/
-export PM_TAG_RE='(^|[ 	(])@[A-Za-z0-9_.]([A-Za-z0-9_./()-]|\[|\])*'
+export PM_TAG_RE='(^|[ 	(])@[A-Za-z0-9_.*]([A-Za-z0-9_./()*-]|\[|\])*'
 # ---- project root: nearest ancestor with .memory/ ----
 CWD="$(json_str cwd)"; [ -n "$CWD" ] && [ -d "$CWD" ] || CWD="$(pwd)"
 ROOT="$CWD"
@@ -224,14 +224,17 @@ pre-edit)
   all_hits="$(
     find "$MEM" -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | while IFS= read -r f; do
       PATHS="$paths" LC_ALL=C awk -v rel="${f#"$ROOT"/}" '
-        BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); tagre = ENVIRON["PM_TAG_RE"] }
+        function pm_hit(p, t,  re) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
+      re = t; gsub(/[][.+?^${}()|\\]/, "\\\\&", re); gsub(/\*\*/, "\001", re); gsub(/\*/, "[^/]*", re); gsub(/\001/, ".*", re)
+      return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
+    BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); tagre = ENVIRON["PM_TAG_RE"] }
         /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags
         { line = $0
           while (match(line, tagre)) {
             tag = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", tag); sub(/[.,;:]+$/, "", tag)
             while (tag ~ /\)$/ && gsub(/\(/, "(", tag) < gsub(/\)/, ")", tag)) { tag = substr(tag, 1, length(tag) - 1); sub(/[.,;:]+$/, "", tag) }
             line = substr(line, RSTART + RLENGTH); t = tag; sub(/\/$/, "", t)
-            for (i = 1; i <= n; i++) if (P[i] == t || index(P[i], t "/") == 1) { print rel ":" FNR ": " $0; next }
+            for (i = 1; i <= n; i++) if (pm_hit(P[i], t)) { print rel ":" FNR ": " $0; next }
           } }' "$f"
     done )"
   [ -n "$all_hits" ] || emit_empty
@@ -247,15 +250,18 @@ pre-edit)
   if [ -n "$holds" ] && [ -f "$MEM/.approvals" ]; then
     now="$(date +%s)"
     approved="$(PATHS="$paths" HOLDS="$holds_all" LC_ALL=C awk -F'\t' -v now="$now" '
-      BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); nh = split(ENVIRON["HOLDS"], H, "\n"); tagre = ENVIRON["PM_TAG_RE"]
+      function pm_hit(p, t,  re) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
+      re = t; gsub(/[][.+?^${}()|\\]/, "\\\\&", re); gsub(/\*\*/, "\001", re); gsub(/\*/, "[^/]*", re); gsub(/\001/, ".*", re)
+      return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
+    BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); nh = split(ENVIRON["HOLDS"], H, "\n"); tagre = ENVIRON["PM_TAG_RE"]
         for (h = 1; h <= nh; h++) { line = H[h]
           while (match(line, tagre)) {
             t = substr(line, RSTART, RLENGTH); sub(/^[ \t(]*@/, "", t); sub(/[.,;:]+$/, "", t)
             while (t ~ /\)$/ && gsub(/\(/, "(", t) < gsub(/\)/, ")", t)) { t = substr(t, 1, length(t) - 1); sub(/[.,;:]+$/, "", t) }
             sub(/\/$/, "", t)
             line = substr(line, RSTART + RLENGTH)
-            for (i = 1; i <= n; i++) if (P[i] == t || index(P[i], t "/") == 1) held[i] = 1 } } }
-      $1 + 0 > now { t = $2; sub(/\/$/, "", t); for (i = 1; i <= n; i++) if (P[i] == t || index(P[i], t "/") == 1) ok[i] = 1 }
+            for (i = 1; i <= n; i++) if (pm_hit(P[i], t)) held[i] = 1 } } }
+      $1 + 0 > now { t = $2; sub(/\/$/, "", t); for (i = 1; i <= n; i++) if (pm_hit(P[i], t)) ok[i] = 1 }
       END { for (i = 1; i <= n; i++) if (held[i] && !ok[i]) { print "no"; exit } print "yes" }' "$MEM/.approvals")"
     [ "$approved" = "yes" ] && holds=""
   fi
