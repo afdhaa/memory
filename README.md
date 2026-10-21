@@ -1,4 +1,4 @@
-# project-memory v3.13
+# project-memory v3.14
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,

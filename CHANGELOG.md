@@ -3,6 +3,29 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.14.0
+- SKILL.md rewritten for the everyday loop: 341 → 145 lines (3,900 → 1,550 words), read at every
+  task. Onboarding, re-scans, confirm mode, inbox triage, clean-up, user commands, team use and hook
+  details moved to `references/workflows.md`, read only when needed. The Capture table now also
+  covers freezes, contracts and stale `topics/` sentences; confirm mode's write/propose split is
+  back in SKILL.md, since agents need it on every turn.
+- Tested on chalk, cors, cobra, requests, serde_json and laravel/laravel with four agent sessions:
+  - Hooks: prompt recall no longer repeats `index.md` lines the session start showed; the edit hook
+    keeps its own list, so a rule a prompt already showed still appears before the edit; session
+    start warns about planted text in any memory file, also entries without `@path`; a question
+    such as "what do you remember…?" is not captured as a correction; long paragraphs are cut in
+    recall; in confirm mode the onboarding text is proposed, and a declined section gets
+    `Not needed: <reason>`.
+  - Changelog: a CI workflow that updates the changelog (laravel's `update-changelog.yml`) counts
+    as generated; the unreleased section may be called "dev" or "main"; placeholder lines are kept.
+  - SKILL.md: Rule reasons and placement, `user.md` creation and format, the global-vs-project
+    tie-break, source markers for approved proposals and user-requested decisions, `*` inside a
+    file name, where to park an unanswered changelog question.
+  - Lint's advice on planted instructions matches SKILL.md (agents tell the user; people remove it).
+  - "complete index.md from the scan" approves the whole onboarding in confirm mode; common filler
+    words ("only", "first", "check") no longer drive prompt recall; the scan marks web frameworks
+    found only in devDependencies as "(dev only)".
+
 ## 3.13.0
 Tested on six small repositories (slugify, itsdangerous, cast, itoa, phpdotenv,
 the-art-of-command-line), with two full agent sessions (auto and confirm mode).

@@ -10,7 +10,7 @@ changelog_info() {
   if [ -n "$v" ]; then
     v="${v%[;,.:]}"   # "- Changelog: none; …", "CHANGES.md."
     case "$(printf '%s' "$v" | tr 'A-Z' 'a-z')" in none|no|-|"") printf 'rule\tnone\tthis project keeps no changelog (index.md Rules): record nothing\n' ;;
-      *) printf 'rule\t%s\tadd one line under an "Unreleased" section at the top of %s (create the file or the section if missing), in the style the file already uses\n' "$v" "$v" ;; esac
+      *) printf 'rule\t%s\tadd one line to the section for unreleased changes at the top of %s (create the file, or an "Unreleased" section, if missing), in the style the file already uses\n' "$v" "$v" ;; esac
     return; fi
   if [ -d "$r/.changeset" ]; then
     printf 'fragments\t.changeset/\tadd a changeset: a new .changeset/<name>.md with the package bump and one user-facing sentence (npx changeset)\n'; return; fi
@@ -22,6 +22,10 @@ changelog_info() {
   for f in release-please-config.json .release-please-manifest.json .releaserc .releaserc.json .releaserc.yml .releaserc.yaml release.config.js release.config.cjs cliff.toml .github/release-drafter.yml .github/release.yml; do
     [ -f "$r/$f" ] && { printf 'generated\t%s\trelease notes are generated from commit messages or PR titles: write a clear conventional commit message / PR title (feat:, fix:…); do not edit a changelog by hand\n' "$f"; return; }
   done
+  # a CI workflow that rewrites the changelog (laravel/laravel: update-changelog.yml)
+  for f in "$r"/.github/workflows/*changelog*.y*ml "$r"/.github/workflows/*release-notes*.y*ml; do
+    [ -f "$f" ] && { printf 'generated\t%s\tthe changelog is updated by the %s workflow at release time: write a clear commit message and PR title; do not edit it by hand\n' "${f#"$r"/}" "${f##*/}"; return; }
+  done
   # np and release-it publish release notes on GitHub Releases, written at release time
   if grep -qsE '"(np|release-it)"[[:space:]]*:' "$r/package.json" || [ -f "$r/.release-it.json" ]; then
     printf 'generated\t%s\trelease notes are written on GitHub Releases at release time: write a clear commit message and PR title; do not create a changelog file\n' "$(grep -qs '"np"' "$r/package.json" && echo np || echo release-it)"; return; fi
@@ -29,7 +33,7 @@ changelog_info() {
     [ -f "$r/$f" ] || continue
     if head -n 15 "$r/$f" | grep -qiE 'auto(matically)?[- ]generated|do not edit|semantic-release|release-please|git-cliff'; then
       printf 'generated\t%s\t%s is generated: write a clear conventional commit message instead; do not edit it by hand\n' "$f" "$f"; return; fi
-    printf 'file\t%s\tadd one line under an "Unreleased" section at the top of %s (create the section if it is missing), in the style the file already uses — unless CONTRIBUTING or AGENTS.md says the changelog is written at release time\n' "$f" "$f"; return
+    printf 'file\t%s\tadd one line to the section for unreleased changes at the top of %s (it may be called "Unreleased", "dev", "main" or carry the next version; create "Unreleased" only if there is none), in the style the file already uses, keeping any placeholder line it carries — unless CONTRIBUTING or AGENTS.md says the changelog is written at release time\n' "$f" "$f"; return
   done
   printf 'none\t-\tthis project has no changelog: ask the user once whether to create CHANGELOG.md ("# Changelog", then "## Unreleased") or whether release notes live elsewhere (GitHub Releases, a website), and record the answer in index.md Rules as "- Changelog: CHANGELOG.md" or "- Changelog: none (<where release notes live>)"\n'
 }

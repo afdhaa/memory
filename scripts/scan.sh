@@ -61,9 +61,11 @@ if has package.json; then
   FW="$(printf '%s\n' "$PKG" | awk -F'\t' -v self="$SELF" '
     BEGIN { n = split("next:Next.js nuxt:Nuxt react:React react-native:React_Native expo:Expo vue:Vue svelte:Svelte @sveltejs/kit:SvelteKit @angular/core:Angular solid-js:Solid astro:Astro @remix-run/react:Remix electron:Electron express:Express fastify:Fastify @nestjs/core:NestJS hono:Hono koa:Koa @trpc/server:tRPC graphql:GraphQL socket.io:Socket.IO prisma:Prisma @prisma/client:Prisma drizzle-orm:Drizzle mongoose:Mongoose sequelize:Sequelize typeorm:TypeORM @supabase/supabase-js:Supabase firebase:Firebase tailwindcss:Tailwind @reduxjs/toolkit:Redux zustand:Zustand @tanstack/react-query:TanStack_Query zod:Zod vite:Vite webpack:webpack typescript:TypeScript turbo:Turborepo nx:Nx jest:Jest vitest:Vitest mocha:Mocha @playwright/test:Playwright cypress:Cypress storybook:Storybook eslint:ESLint @biomejs/biome:Biome prettier:Prettier", P, " ")
             for (i = 1; i <= n; i++) { split(P[i], kv, ":"); ORD[i] = kv[1]; NAME[kv[1]] = kv[2] } }
+    $1 != "devDependencies" && ($2 in NAME) { RT[$2] = 1 }
     $1 ~ /ependencies$/ && ($2 in NAME) && !($2 in V) && $2 != self { v = $3; gsub(/^[\^~>=< ]+/, "", v); sub(/[[:space:]|].*/, "", v); V[$2] = v }
     END { for (i = 1; i <= n; i++) if (ORD[i] in V) { nm = NAME[ORD[i]]; gsub(/_/, " ", nm); if (seen[nm]++) continue
-            v = V[ORD[i]]; print nm ((v ~ /^[0-9]/) ? " " v : "") } }' | join ', ')"
+            v = V[ORD[i]]; dev = (!(ORD[i] in RT) && ORD[i] ~ /^(next|nuxt|react|react-native|expo|vue|svelte|@sveltejs\/kit|@angular\/core|solid-js|astro|@remix-run\/react|electron|express|fastify|@nestjs\/core|hono|koa)$/) ? " (dev only)" : ""
+            print nm ((v ~ /^[0-9]/) ? " " v : "") dev } }' | join ', ')"
   STACK="${STACK}- Node.js ($PM)${FW:+ — $FW}"$'\n'
   node_ver="$(printf '%s\n' "$PKG" | awk -F'\t' '$1 == "engines" && $2 == "node" { print $3 }')"
   [ -n "$node_ver" ] && STACK="${STACK}- Node version (engines): $node_ver"$'\n'
