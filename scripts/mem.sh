@@ -2,7 +2,7 @@
 # project-memory helper (v3) — pure bash/awk.
 #   mem.sh search <words…>      ranked search across .memory/ and user memory
 #   mem.sh path <file-or-dir>   entries tagged @path that apply to it
-#   mem.sh lint                 size, caps, secrets, map, missing @paths, stale & duplicate entries
+#   mem.sh lint                 size, caps, secrets, map, missing @paths, stale & duplicate entries, filler wording
 #   mem.sh secrets [--staged]   secret scan only (exit 1 if found); --staged = what git would commit
 #   mem.sh stats                entry counts per file + injection hits
 #   mem.sh approve <path> [min]  allow edits in a #hold area for N minutes (default 60) — only after the user approves
@@ -135,6 +135,19 @@ lint)
         if (tag ~ /\// || tag ~ /\.[a-z]+$/) print FILENAME ":" FNR "\t" tag } }' ${FILES[@]+"${FILES[@]}"} /dev/null 2>/dev/null | sort -u)
   # duplicates (e.g. after merge=union)
   while IFS= read -r m; do w "duplicate entry: $m"; done < <(awk '/^(- |[0-9]+\. )/ { k = $0; sub(/^[0-9]+\. /, "", k); sub(/^- /, "", k); if (seen[k]++) print FILENAME ":" FNR ": " substr($0, 1, 90) }' .memory/decisions.md .memory/gotchas.md 2>/dev/null)
+  # filler / generated-sounding wording (see "Anti-slop" in SKILL.md); not in comments, quotes, code blocks or the scan block
+  SLOP_RE="it'?s (important|worth) (to note|noting|mentioning)|it is (important|worth) (to note|noting|mentioning)|in order to|as mentioned (above|earlier|before)|in summary|in conclusion|basically|plays? an? (key|crucial|vital|pivotal|important) role|best practices|robust|seamless(ly)?|comprehensive|powerful|cutting-edge|state-of-the-art|game-chang(er|ing)|leverag(e|es|ed|ing)|utiliz(e|es|ed|ing|ation)|delv(e|es|ed|ing)|streamlin(e|es|ed|ing)|crucial|pivotal|holistic|various|great news|let me know|feel free|as an ai|successfully"
+  while IFS= read -r m; do w "filler wording: $m → say concretely what it does or delete it"; done < <(SLOP_RE="$SLOP_RE" awk '
+      BEGIN { re = "(^|[^a-z0-9_])(" ENVIRON["SLOP_RE"] ")([^a-z0-9_]|$)" }
+      FNR == 1 { inc = 0; gen = 0; code = 0 }
+      /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
+      /^[[:space:]]*(```|~~~)/ { code = !code; next } code { next }
+      /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
+      /^>/ { next }
+      { l = tolower($0); gsub(/`[^`]*`/, "", l)
+        ws = ""; while (match(l, re)) { wd = substr(l, RSTART, RLENGTH); gsub(/^[^a-z]+|[^a-z]+$/, "", wd)
+          ws = ws (ws != "" ? ", " : "") "\"" wd "\""; l = substr(l, RSTART + RLENGTH - 1) }
+        if (ws != "") print FILENAME ":" FNR ": " ws " in: " substr($0, 1, 70) }' ${FILES[@]+"${FILES[@]}"} /dev/null | head -n 10)
   # stale gotchas: older than PM_STALE_DAYS, seen ≤ 1, not #hold, never injected by hooks in that period
   today="$(date +%Y-%m-%d)"
   if [ -f .memory/gotchas.md ]; then

@@ -67,6 +67,7 @@ This project keeps persistent memory in `.memory/` (Markdown, shared by all agen
 - For a new request, look for related memory: `bash .agents/skills/project-memory/scripts/mem.sh search <keywords>`.
 - Before editing an area: `bash .agents/skills/project-memory/scripts/mem.sh path <file>`; ask before touching anything tagged `#hold`.
 - While working: record decisions, user corrections and gotchas immediately. Before finishing: update `.memory/progress.md`.
+- Write memory in English (unless `.memory/index.md` sets another `Memory language:`), in plain, specific sentences without filler — see the skill's Writing style and Anti-slop rules.
 - Never write secrets into memory.
 <!-- project-memory:end -->
 MD

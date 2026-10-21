@@ -11,6 +11,7 @@
 <!-- Standing rules, max ~15, most important first. One full sentence each, with the reason
      when it is not obvious. Example:
 - Always reply in Bahasa Indonesia; code comments in English.
+- Memory language: English (default; change only if the user asks).
 - Never commit directly to main; every change goes through a pull request so CI runs first.
 -->
 

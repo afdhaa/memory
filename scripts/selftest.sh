@@ -171,6 +171,11 @@ o="$(ss ov2)"; check "no overview reminder once it is written" '! printf "%s" "$
 { printf '# Codebase\n\n'; sed -n '/^<!-- scan:start/,/^<!-- scan:end/p' .memory/topics/codebase.md; printf '\n## Notes\n- old note\n'; } > c.tmp && mv c.tmp .memory/topics/codebase.md
 bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
 check "older codebase.md gets the narrative section once, notes kept" '[ "$(grep -c "^## How it fits together$" .memory/topics/codebase.md)" = 1 ] && grep -q "old note" .memory/topics/codebase.md && [ "$(grep -c "^<!-- scan:start" .memory/topics/codebase.md)" = 1 ]' "$(cat .memory/topics/codebase.md)"
+printf '1. **[2026-10-21] We leverage a robust cache** #cache (agent, seen: 1)\n   Do instead: pass `--robust`.\n' >> .memory/gotchas.md
+o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
+check "lint flags filler wording, not code spans" 'printf "%s" "$o" | grep -q "\"leverage\", \"robust\"" && ! printf "%s" "$o" | grep -q "\"robust\", \"robust\""' "$o"
+sed '$d' .memory/gotchas.md | sed '$d' > g.tmp && mv g.tmp .memory/gotchas.md
+check "bootstrap asks for English memory" 'grep -q "Write memory in English" "$P/AGENTS.md"' "$(cat "$P/AGENTS.md")"
 check "scan: lint clean" 'bash "$SRC/scripts/mem.sh" lint >/dev/null' "$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
 o="$(printf '{"session_id":"%s-sc","cwd":"%s","prompt":"update readme storefront shop"}' "$RUN" "$S" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
 check "scan block not used for prompt recall" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"

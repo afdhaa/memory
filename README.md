@@ -1,4 +1,4 @@
-# project-memory v3.4
+# project-memory v3.5
 
 Memori berbentuk Markdown untuk coding agent: per project di `.memory/`, plus memori pribadi
 lintas project di `~/.agents/memory/user.md`. Satu skill untuk Claude Code, Codex, OpenCode,
@@ -111,28 +111,40 @@ bila scan sudah tertinggal lebih dari 150 commit (`PM_SCAN_STALE`).
 ### Gaya penulisan memori
 
 Isi `.memory/` ditulis untuk dibaca manusia (rekan tim, reviewer PR, Anda sendiri), bukan hanya
-agent. SKILL.md mewajibkan agent menulis setiap catatan agar bisa dipahami orang yang tidak ikut
-sesi tersebut:
+agent.
+
+**Bahasa: Inggris secara default**, apa pun bahasa percakapannya, agar semua orang dan semua agent
+bisa membacanya. Yang tetap ditulis apa adanya: teks UI, pesan error, dan istilah bisnis (dikutip,
+lalu dijelaskan). Supaya pencarian otomatis tetap menemukan catatan saat Anda bertanya dalam bahasa
+Indonesia, agent menambahkan istilah Anda sebagai tag (mis. `#harga`). Untuk memakai bahasa lain,
+tambahkan baris ini di Rules `index.md` (atau di `user.md` untuk semua project):
+
+    - Memory language: Indonesian
+
+**Aturan penulisan** (detailnya di SKILL.md, bagian *Writing style* dan *Anti-slop*):
 
 - Judul berupa kalimat utuh yang langsung menyebut intinya, bukan singkatan atau potongan kata.
 - Selalu ada **apa**, **kenapa** (`Why:`), dan **harus bagaimana** (`Do instead:`).
-- Konkret: sebut perintah, file, angka, atau pesan error — bukan "kadang gagal".
-- Istilah domain dijelaskan saat pertama muncul; satu ide per catatan; tag di akhir baris.
-- `topics/` ditulis seperti halaman wiki singkat, `procedures/` seperti resep langkah demi langkah,
-  `progress.md` cukup jelas untuk dilanjutkan orang lain besok.
+- Konkret: sebut perintah, file, angka, atau pesan error.
+- **Anti-slop:** tanpa kalimat pengisi ("It is important to note…", "In order to"), tanpa kata promosi
+  (robust, seamless, comprehensive, leverage…), tanpa angka samar ("various", "several"), tanpa
+  gaya asisten ("I", "Great news", "Let me know"), tanpa emoji, dan tanpa tebakan yang ditulis
+  sebagai fakta.
+- `mem.sh lint` menandai kata-kata pengisi tersebut (teks di dalam `code` tidak dihitung).
 
 Contoh:
 
     ✗ 1. **[2026-10-14] API 429** #api (agent, seen: 1)
          Do instead: sleep.
+    ✗ 1. **[2026-10-14] Implemented a robust, seamless retry strategy for the API** #api
+         Why: it is important to note that various errors can occur.
 
-    ✓ 1. **[2026-10-14] API supplier menolak request beruntun dengan HTTP 429** #api @src/sync/ (agent, seen: 1)
-         Why: batasnya sekitar 60 request per menit per key; upload produk massal melewatinya.
-         Do instead: beri jeda 1 detik di setiap loop create/publish (lihat syncProducts()).
+    ✓ 1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api #produk @src/sync/ (agent, seen: 1)
+         Why: it allows about 60 requests per minute per key; bulk product uploads exceeded that.
+         Do instead: wait 1 second between requests in every create/publish loop (see syncProducts()).
 
-Label `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` tetap berbahasa Inggris karena dikenali
-hook; isinya memakai bahasa project. Minta **"rapikan memori"** untuk menulis ulang catatan lama
-yang masih kriptik.
+Label `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` selalu berbahasa Inggris karena dikenali
+hook. Minta **"rapikan memori"** untuk menulis ulang (dan menerjemahkan) catatan lama.
 
 ### Perintah ke agent
 
@@ -144,7 +156,7 @@ yang masih kriptik.
 | "apa yang kamu tahu soal X" | ringkasan dari memori + rujukan file |
 | "jangan sentuh folder X" | area dibekukan (`#hold`); agent wajib minta izin sebelum mengedit |
 | "update memory" | catat semua yang penting dari sesi ini |
-| "rapikan memori" | gabung duplikat, buang yang basi, cek ulang dengan lint |
+| "rapikan memori" | gabung duplikat, buang yang basi, tulis ulang catatan kriptik/bertele-tele, cek ulang dengan lint |
 | "scan ulang" / "index ulang project" | `mem.sh scan`, lalu Project summary/Key facts diperbarui bila perlu |
 | "jangan dicatat" | tidak disimpan |
 
@@ -152,7 +164,7 @@ yang masih kriptik.
 
     bash .agents/skills/project-memory/scripts/mem.sh search harga produk
     bash .agents/skills/project-memory/scripts/mem.sh path src/api/
-    bash .agents/skills/project-memory/scripts/mem.sh lint      # + @path hilang, entri basi, duplikat
+    bash .agents/skills/project-memory/scripts/mem.sh lint      # + @path hilang, entri basi, duplikat, kata pengisi
     bash .agents/skills/project-memory/scripts/mem.sh stats
     bash .agents/skills/project-memory/scripts/mem.sh scan      # index ulang repo
     bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # buka #hold 30 menit

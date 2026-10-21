@@ -130,7 +130,7 @@ prompt)
         [ -f "$MEM/inbox.md" ] || printf '# Inbox\n\n> Captured automatically from user prompts (local, gitignored). Triaged by the agent: record durable items, then delete them.\n\n' > "$MEM/inbox.md"
         printf -- '- %s · "%s" <!-- %s -->\n' "$TODAY" "$excerpt" "$key" >> "$MEM/inbox.md"
       fi
-      ctx="[project-memory] This message looks like a correction or standing instruction (captured in .memory/inbox.md). If it is durable, record it now as a User directive in .memory/gotchas.md (or a Rule in index.md; user memory if it applies to every project) and remove it from the inbox. If it is a one-off, just remove it from the inbox."
+      ctx="[project-memory] This message looks like a correction or standing instruction (captured in .memory/inbox.md). If it is durable, record it now (rewritten in the memory language — English unless index.md sets another — as a clear entry) as a User directive in .memory/gotchas.md (or a Rule in index.md; user memory if it applies to every project) and remove it from the inbox. If it is a one-off, just remove it from the inbox."
     fi
   fi
   # (b) prompt-based recall: rank memory entries against the prompt

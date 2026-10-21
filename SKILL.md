@@ -2,10 +2,10 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.4.0
+  version: 3.5.0
 ---
 
-# Project Memory (v3.4)
+# Project Memory (v3.5)
 
 Every coding agent working in this repo shares one long-term memory, kept as Markdown.
 No server, no database: the files are the memory, `scripts/mem.sh` and `grep` are the
@@ -39,7 +39,7 @@ Raw conversations are never stored.
 Helper (path relative to this SKILL.md; works from anywhere inside the repo):
 - `bash scripts/mem.sh search <words…>` — ranked search (project memory + user memory)
 - `bash scripts/mem.sh path <file>` — entries tagged for a file or folder
-- `bash scripts/mem.sh lint` — sizes, caps, secrets, map gaps, missing @paths, stale and duplicate entries
+- `bash scripts/mem.sh lint` — sizes, caps, secrets, map gaps, missing @paths, stale and duplicate entries, filler words
 - `bash scripts/mem.sh stats` — counts per file and hook usage
 - `bash scripts/mem.sh scan` — index the repo: writes the generated facts block of `topics/codebase.md`,
   adds it to the Map and fills `index.md` Key facts while empty. Never reads `.env` values.
@@ -148,10 +148,45 @@ Every entry must make sense to someone who was **not** in this session and does 
 7. **No session narration.** Not "I tried X, then Y, then found…" — write the conclusion that
    remains true after the session.
 
-Write in the language the user uses for the project, consistently, and use the words the user
-would use when asking about it (prompt recall matches on words). Keep the field labels
-`Why:`, `Do instead:`, `Rejected:`, `Revisit if:` in English — the hooks recognise them — and write
-their content in the project language.
+### Language — English by default
+
+Write all memory files in **English**, whatever language the conversation is in, so every
+teammate and every agent can read them. Exceptions:
+- **Override:** if `index.md` Rules (this project) or `user.md` (all projects) contains a line
+  `Memory language: <language>`, write memory in that language instead. Add or change that line
+  only when the user asks. The field labels `Why:`, `Do instead:`, `Rejected:`, `Revisit if:` stay
+  in English in every language — the hooks recognise them.
+- **Keep verbatim** what must match reality: UI text, error messages, domain terms the business
+  uses, identifiers. Quote them and explain them in English: `the "Simpan Draf" (Save draft) button`.
+- **Recall across languages:** the hooks match memory against the user's words. When the user
+  works in another language, add their key terms as tags so the entry is still found:
+  `**[2026-10-14] Net price excludes the platform fee** #pricing #harga @src/pricing/`.
+- Translate inbox remarks and user corrections into English when you record them; keep the
+  original wording only when the exact phrase matters.
+
+### Anti-slop — no filler, no generated-sounding prose
+
+Memory is read under time pressure. Every word must carry information. Before saving, delete
+anything a reader would skim past. `mem.sh lint` flags the common offenders.
+
+Do not write:
+- **Filler and throat-clearing:** "It is important to note that", "It's worth mentioning",
+  "In order to", "As mentioned above", "Overall,", "In summary", "Basically".
+- **Inflated or marketing words:** robust, seamless, comprehensive, powerful, cutting-edge,
+  leverage, utilize, delve, streamline, crucial, vital, pivotal, holistic, best practices,
+  "plays a key role". Say what the thing does: "retries 3 times", not "robust error handling".
+- **Vague quantities and hedges:** "various", "several", "some issues", "might potentially",
+  "should probably work". Give the number, the name, or say plainly that it is unknown.
+- **Restating:** a `Why:` that repeats the title, a summary sentence that repeats the list above it.
+- **Padding structure:** bullet lists for a single point, bold on half the words, emoji, headings
+  over one line of text, invented lists of three when there are two real items.
+- **Assistant voice and narration:** "I", "we successfully", "Great news", "Let me know", "as an AI",
+  "Now the tests pass!". Memory states facts; it is not a message to anyone.
+- **Unverified claims:** never record a guess as a fact. If it is a hypothesis, write
+  "Unconfirmed:" and what would confirm it — or do not record it.
+
+Test: read the entry aloud. If a senior engineer would cut a word, cut it. If a sentence would be
+true of any project ("Follow best practices for security"), it carries no information — delete it.
 
 Before saving, reread the entry as a newcomer: *"Do I understand what this means and what to
 do, without opening the code or the chat?"* If not, rewrite it.
@@ -252,7 +287,8 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 3. **Stale?** (old, seen once, never surfaced by hooks recently) → verify against the code;
    update, confirm (refresh date), or remove. Ask the user if unsure.
 4. Fold related entries into `topics/<area>.md`; promote recurring lessons; demote outdated rules.
-   Rewrite cryptic or telegraphic entries so they follow *Writing style*.
+   Rewrite cryptic, telegraphic or padded entries so they follow *Writing style* and *Anti-slop*,
+   and translate entries to the memory language (English unless overridden).
 5. Refresh the map in `index.md`; empty `inbox.md`; re-run lint until clean. Report changes.
 
 ## 4. User commands
