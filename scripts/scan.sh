@@ -155,11 +155,12 @@ done
 
 # ---- layout ----
 CHILDREN="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 2 { c[$1 "\t" $2]++ } END { for (k in c) print k "\t" c[k] }' |
-  sort -t"$TAB" -k1,1 -k3,3nr -k2,2 | awk -F'\t' '{ if (n[$1]++ < 6) s[$1] = s[$1] (s[$1] != "" ? ", " : "") "`" $2 "/` " $3 } END { for (d in s) print d "\t" s[d] }')"
+  sort -t"$TAB" -k1,1 -k3,3nr -k2,2 | awk -F'\t' 'n[$1]++ < 6')"
 DIRS="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 1 { c[$1]++ } END { for (d in c) print c[d] "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | head -n 15)"
+# top-level folders, each followed by its largest subfolders as nested bullets
 LAYOUT="$(printf '%s\n' "$DIRS" | CH="$CHILDREN" awk -F'\t' '
-  BEGIN { n = split(ENVIRON["CH"], L, "\n"); for (i = 1; i <= n; i++) { split(L[i], p, "\t"); S[p[1]] = p[2] } }
-  NF { print "- `" $2 "/` — " $1 " files" ((S[$2] != "") ? " (" S[$2] ")" : "") }')"
+  BEGIN { n = split(ENVIRON["CH"], L, "\n"); for (i = 1; i <= n; i++) { split(L[i], p, "\t"); if (p[1] != "") S[p[1]] = S[p[1]] "  - `" p[1] "/" p[2] "/` — " p[3] " files\n" } }
+  NF { printf "- `%s/` — %s files\n%s", $2, $1, S[$2] }')"
 ROOTF="$(printf '%s\n' "$FILES" | awk -F/ 'NF == 1' | head -n 25 | sed 's/.*/`&`/' | join ', ')"
 TOP_DIRS="$(printf '%s\n' "$DIRS" | awk -F'\t' 'NF && $2 !~ /^\./ && n++ < 5 { print "`" $2 "/`" }' | join ', ')"
 
@@ -234,6 +235,17 @@ OVERVIEW="$OVERVIEW_H
      newcomer, in full sentences: what the code does and its main parts; how a typical request or job
      flows through it (entry point → … → storage/output), naming real files and folders; where to
      start reading; conventions or design choices that are not obvious from the file names. -->"
+LAYOUT_H="## Project layout"
+LAYOUT_S="$(cat <<'MD'
+## Project layout
+<!-- Written by the agent after a scan; mem.sh scan never changes it. One line per folder (or root
+     file) a newcomer needs: what lives there and where new code of that kind goes. Take the list from
+     the generated Layout below; skip folders nobody edits (build output, vendored code). Example:
+- `src/routes/` — Express routers, one file per URL prefix; keep them thin and call a service.
+- `src/services/` — business logic (pricing, catalogue, supplier sync); new features start here.
+-->
+MD
+)"
 FACTS_H="## Repository facts (generated)
 > Produced by \`mem.sh scan\` from file names, manifests and git history. Do not edit: this block is
 > replaced on every scan. Write explanations in the sections above instead."
@@ -243,7 +255,7 @@ if [ -f "$OUT" ] && grep -q '^<!-- scan:start' "$OUT"; then
 elif [ -f "$OUT" ]; then
   { cat "$OUT"; printf '\n%s\n%s\n' "$FACTS_H" "$BLOCK"; } > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"; echo "+ $OUT (scan block added at the end)"
 else
-  printf '# Codebase\n\n%s\n\n## Notes\n<!-- Other facts about the codebase worth keeping, in full sentences. -->\n\n%s\n%s\n' "$OVERVIEW" "$FACTS_H" "$BLOCK" > "$OUT"
+  printf '# Codebase\n\n%s\n\n%s\n\n## Notes\n<!-- Other facts about the codebase worth keeping, in full sentences. -->\n\n%s\n%s\n' "$OVERVIEW" "$LAYOUT_S" "$FACTS_H" "$BLOCK" > "$OUT"
   echo "+ $OUT"
 fi
 # older codebase.md without the narrative section: add it once, right after the title
@@ -251,6 +263,12 @@ if ! grep -qxF "$OVERVIEW_H" "$OUT"; then
   OV="$OVERVIEW" awk 'NR == 1 && /^# / { print; print ""; print ENVIRON["OV"]; print ""; done = 1; next }
     NR == 1 { print ENVIRON["OV"]; print ""; done = 1 } { print }' "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
   echo "~ $OUT (added \"How it fits together\" for the agent to write)"
+fi
+# …and without "Project layout": add it once, before Notes / the generated facts (or at the end)
+if ! grep -qxF "$LAYOUT_H" "$OUT"; then
+  LS="$LAYOUT_S" awk '!done && (/^## Notes$/ || /^## Repository facts/ || /^<!-- scan:start/) { print ENVIRON["LS"]; print ""; done = 1 }
+    { print } END { if (!done) { print ""; print ENVIRON["LS"] } }' "$OUT" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+  echo "~ $OUT (added \"Project layout\" for the agent to write)"
 fi
 
 # ---- index.md: Map entry + Key facts while empty ----
@@ -276,7 +294,7 @@ section_fill() {
     }' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
 }
 if ! grep -q 'topics/codebase\.md' "$IDX"; then
-  section_fill "$IDX" "Map" "- topics/codebase.md — how the code fits together, plus generated repo facts: stack, commands, layout, config, CI (refresh: mem.sh scan)" 0
+  section_fill "$IDX" "Map" "- topics/codebase.md — how the code fits together, what each folder is for, plus generated repo facts: stack, commands, layout, config, CI (refresh: mem.sh scan)" 0
   echo "~ $IDX (Map: topics/codebase.md)"
 fi
 FACTS=""
@@ -288,7 +306,7 @@ FACTS=""
 [ -n "$ENV_EX" ] && FACTS="${FACTS:+$FACTS
 }- Config: environment variables listed in \`$ENV_EX\` ($ENV_KEYS); real values only in local \`.env\` files"
 FACTS="${FACTS:+$FACTS
-}- More: topics/codebase.md (generated scan)"
+}- More: topics/codebase.md (how the code fits together, project layout, generated facts)"
 before="$(cksum < "$IDX")"
 section_fill "$IDX" "Key facts" "$FACTS" 1
 [ "$before" != "$(cksum < "$IDX")" ] && echo "~ $IDX (Key facts filled from scan)"

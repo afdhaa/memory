@@ -30,7 +30,7 @@ USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"
 STALE_DAYS="${PM_STALE_DAYS:-120}"
 SECRET_RE='(eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY|[Bb]earer [A-Za-z0-9._-]{20,}|(password|passwd|secret|api[_-]?key|token)[[:space:]]*[:=][[:space:]]*[^[:space:]<>\[]{8,}|([Tt]oken|TOKEN|[Bb]earer|[Kk]ey|KEY|[Ss]ecret|[Aa]uth[A-Za-z]*)[^[:alnum:]]{1,6}[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
 
-mem_files() { find .memory -type f -name '*.md' ! -name inbox.md 2>/dev/null | sort; }
+mem_files() { find .memory -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | sort; }   # README.md = docs, not memory
 FILES=(); while IFS= read -r f; do FILES+=("$f"); done < <(mem_files)
 hash() { printf '%s' "$1" | cksum | cut -d' ' -f1; }
 # path argument (relative to where the user ran mem.sh, or absolute) → path relative to the repo root

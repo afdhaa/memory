@@ -1,4 +1,4 @@
-# project-memory v3.5
+# project-memory v3.6
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -22,7 +22,7 @@ What it creates:
 |---|---|
 | `.agents/skills/project-memory/` | copy of the skill (read by Codex, OpenCode, Antigravity, omp) |
 | `.claude/skills/project-memory` | symlink to the copy above (Claude Code) |
-| `.memory/` | project memory from the templates, scanned right away (see §2) |
+| `.memory/` | project memory from the templates, scanned right away (see §2); `.memory/README.md` explains each file to teammates |
 | `AGENTS.md`, `CLAUDE.md` | a short instruction block between `<!-- project-memory:start/end -->` |
 | `.claude/settings.json`, `.codex/hooks.json` | automatic hooks (see §3) |
 | `.gitignore`, `.gitattributes`, pre-commit | keeps personal files out of git, merges without conflicts, blocks leaked tokens |
@@ -59,7 +59,7 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 82 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs 85 automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).
@@ -74,12 +74,14 @@ the global skill in omp), run the scan from the project root; it creates `.memor
     bash ~/tools/project-memory/scripts/mem.sh scan            # or .agents/skills/project-memory/scripts/mem.sh
     bash ~/tools/project-memory/scripts/mem.sh scan --print    # print the result only, write nothing
 
-`.memory/topics/codebase.md` has two parts:
+`.memory/topics/codebase.md` has three parts:
 
 1. **How it fits together**: an overview the agent writes after the scan. It covers the main
    parts of the code, how a request or job flows from the entry point to storage, which files to
    read first, and conventions that the file names do not reveal. The scan never changes it.
-2. **Repository facts (generated)**: the scan output. Each section opens with one sentence that
+2. **Project layout**: one line per folder, written by the agent: what lives there and where new
+   code of that kind goes. The scan never changes it.
+3. **Repository facts (generated)**: the scan output. Each section opens with one sentence that
    says what its list contains:
 
 | Section | Contents |
@@ -87,7 +89,7 @@ the global skill in omp), run the scan from the project root; it creates `.memor
 | Overview | name, README summary, file count per language, branch/commits/remote, docs |
 | Stack | Node (npm/pnpm/yarn/bun + frameworks and versions), Python, Go, Rust, PHP, Ruby, Java/Kotlin, .NET, Dart, Elixir, Deno, runtime versions |
 | Commands | `package.json`/`composer.json` scripts, `Makefile`/`justfile` targets, standard commands (`go test ./...`, `cargo test`, `pytest`) |
-| Layout | main folders and subfolders with file counts, files at the root |
+| Layout | main folders with their largest subfolders and file counts, files at the root |
 | Infrastructure & CI | Docker, docker-compose services, GitHub Actions/GitLab CI/…, Vercel/Netlify/Fly/…, Terraform |
 | Config & environment | variable **names** from `.env.example`; `.env` contents are never read |
 | Tests | number of test files and where they are |
@@ -96,14 +98,14 @@ the global skill in omp), run the scan from the project root; it creates `.memor
 The scan also adds `topics/codebase.md` to the Map in `index.md` and fills **Key facts** while
 that section is empty. A re-scan replaces only the block between `scan:start`/`scan:end`; text
 outside the block and Key facts you have edited stay as they are. An older `codebase.md` without
-"How it fits together" gets that section, empty, for the agent to write. `mem.sh lint` warns when
+"How it fits together" or "Project layout" gets those sections, empty, for the agent to write. `mem.sh lint` warns when
 the scan is more than 150 commits old (`PM_SCAN_STALE`).
 
 ### After the scan
 
 1. Open your agent at the project root and ask it to **"complete .memory/index.md from the scan"**.
-   The agent writes the Project summary and the "How it fits together" section of `codebase.md`.
-   In Claude Code and Codex, a hook reminds it while either is still empty.
+   The agent writes the Project summary and the "How it fits together" and "Project layout"
+   sections of `codebase.md`. In Claude Code and Codex, a hook reminds it while any is still empty.
 2. Work as usual. The agent reads memory at the start of a task and, before finishing, records
    decisions, your corrections, gotchas and progress. Whenever it writes to memory, it ends its
    reply with one line such as `📝 memory: +1 gotcha (#test), progress`.

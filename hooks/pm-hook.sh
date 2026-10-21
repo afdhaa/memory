@@ -91,20 +91,23 @@ $(cap "$(grep -vE '^[[:space:]]*<!--.*-->[[:space:]]*$' "$USER_MEM")" 4000)"
   [ -n "$files" ] && ctx="$ctx
 --- other memory files (open when relevant; search: bash .agents/skills/project-memory/scripts/mem.sh search <words>) ---
 $files"
-  # Project summary still empty (only the template comment) → ask the agent to index the project
-  # (no "## Project summary" heading at all = custom layout: do not nag)
-  if printf '%s\n' "$idx" | LC_ALL=C awk '/^## /{ on = ($0 == "## Project summary"); if (on) seen = 1; next }
+  # sections still empty (only the template comment) → ask the agent to write them
+  # (heading missing = custom layout: do not nag)
+  section_empty() { LC_ALL=C awk -v h="## $1" '/^## /{ on = ($0 == h); if (on) seen = 1; next }
       on && /^[[:space:]]*<!--/ { c = !/-->/; next } on && c { if (/-->/) c = 0; next }
-      on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }'; then
+      on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }'; }
+  cbm=""; if [ -f "$MEM/topics/codebase.md" ]; then
+    section_empty "How it fits together" < "$MEM/topics/codebase.md" && cbm="the \"How it fits together\" section (3–6 short paragraphs in full sentences: main parts, how a request or job flows through the code, where to start reading, non-obvious conventions)"
+    section_empty "Project layout" < "$MEM/topics/codebase.md" && cbm="${cbm:+$cbm and }the \"Project layout\" section (one line per folder a newcomer needs: what lives there, where new code of that kind goes)"
+  fi
+  if printf '%s\n' "$idx" | section_empty "Project summary"; then
     scan="Read .memory/topics/codebase.md (generated repo scan)"
     [ -f "$MEM/topics/codebase.md" ] || scan="First run: bash .agents/skills/project-memory/scripts/mem.sh scan (indexes the repo into .memory/topics/codebase.md and fills Key facts), then read .memory/topics/codebase.md"
     ctx="$ctx
-[project-memory] New project memory: index.md has no Project summary yet. Early in this session: $scan and README, then write a 3–5 sentence Project summary in index.md (what it is, who uses it, current stage), write the \"How it fits together\" section of .memory/topics/codebase.md, check Key facts, and tell the user in one line."
-  elif [ -f "$MEM/topics/codebase.md" ] && LC_ALL=C awk '/^## /{ on = ($0 == "## How it fits together"); if (on) seen = 1; next }
-      on && /^[[:space:]]*<!--/ { c = !/-->/; next } on && c { if (/-->/) c = 0; next }
-      on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }' "$MEM/topics/codebase.md"; then
+[project-memory] New project memory: index.md has no Project summary yet. Early in this session: $scan and README, then write a 3–5 sentence Project summary in index.md (what it is, who uses it, current stage)${cbm:+, write $cbm of .memory/topics/codebase.md}, check Key facts, and tell the user in one line."
+  elif [ -n "$cbm" ]; then
     ctx="$ctx
-[project-memory] .memory/topics/codebase.md has no \"How it fits together\" overview yet. Early in this session, read its generated facts, the README and the main entry points, then write that section (3–6 short paragraphs in full sentences: main parts, how a request or job flows through the code, where to start reading, non-obvious conventions). Tell the user in one line."
+[project-memory] .memory/topics/codebase.md is missing explanations. Early in this session, read its generated facts, the README and the main entry points, then write $cbm. Tell the user in one line."
   fi
   if [ -f "$MEM/inbox.md" ]; then
     n="$(grep -c '^- ' "$MEM/inbox.md" 2>/dev/null)"; n="${n:-0}"
@@ -140,7 +143,7 @@ prompt)
   hits=""
   if [ -n "${terms// /}" ]; then
     FILES=()
-    while IFS= read -r f; do FILES+=("$f"); done < <(find "$MEM" -type f -name '*.md' ! -name index.md ! -name progress.md ! -name inbox.md 2>/dev/null | sort)
+    while IFS= read -r f; do FILES+=("$f"); done < <(find "$MEM" -type f -name '*.md' ! -name index.md ! -name progress.md ! -name inbox.md ! -name README.md 2>/dev/null | sort)
     [ "${#FILES[@]}" -gt 0 ] && hits="$(LC_ALL=C awk -v terms="$terms" -v k="${PM_RECALL_MAX:-5}" -v root="$ROOT/" '
       BEGIN { nt = split(terms, T, " ") }
       FNR == 1 { inc = 0; gen = 0 }
@@ -202,7 +205,7 @@ pre-edit)
     } | while IFS= read -r p; do rel_path "$p"; done | sort -u )"
   [ -n "$paths" ] || emit_empty
   all_hits="$(
-    find "$MEM" -type f -name '*.md' ! -name inbox.md 2>/dev/null | while IFS= read -r f; do
+    find "$MEM" -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | while IFS= read -r f; do
       PATHS="$paths" LC_ALL=C awk -v rel="${f#"$ROOT"/}" '
         BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); tagre = ENVIRON["PM_TAG_RE"] }
         /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags

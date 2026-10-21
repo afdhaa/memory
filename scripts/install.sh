@@ -165,6 +165,7 @@ link_skill "$ROOT/.claude/skills" "../../.agents/skills/$NAME"
 
 if [[ -d "$ROOT/.memory" ]]; then
   log "= .memory/ (exists, untouched)"
+  [ -f "$ROOT/.memory/README.md" ] || { cp "$SRC/assets/templates/README.md" "$ROOT/.memory/README.md"; log "+ .memory/README.md (explains the memory files to people)"; }
   [ -f "$ROOT/.memory/topics/codebase.md" ] || log "  tip: index this repo with: bash .agents/skills/project-memory/scripts/mem.sh scan"
 else
   cp -R "$SRC/assets/templates" "$ROOT/.memory"; log "+ .memory/ (from templates)"

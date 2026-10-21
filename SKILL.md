@@ -2,10 +2,10 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.5.0
+  version: 3.6.0
 ---
 
-# Project Memory (v3.5)
+# Project Memory (v3.6)
 
 Every coding agent working in this repo shares one long-term memory, kept as Markdown.
 No server, no database: the files are the memory, `scripts/mem.sh` and `grep` are the
@@ -18,12 +18,13 @@ Write an entry only if it will save a future agent time or prevent a future mist
 
 ```
 .memory/                      # committed — shared with the team
+├── README.md       # For people: what each memory file is for. Documentation, not memory.
 ├── index.md        # ALWAYS read. Summary, rules (max ~15), key facts, map. ≤ ~150 lines.
 ├── progress.md     # Current state: in progress / next / blocked. Rewritten, never appended.
 ├── decisions.md    # Why things are the way they are. Newest first. Reversed ones kept, struck through.
 ├── gotchas.md      # Curated runbook by category, priority-sorted, max 10 per category, each with "Do instead".
 ├── topics/         # Deeper knowledge per area (auth.md, deploy.md …) — the project wiki.
-│   └── codebase.md # "How it fits together" (written by you) + generated repo facts from `mem.sh scan`.
+│   └── codebase.md # "How it fits together" + "Project layout" (written by you) + generated repo facts from `mem.sh scan`.
 ├── procedures/     # Step-by-step workflows that worked and will be repeated.
 ├── local.md        # gitignored: personal notes for this project.
 ├── inbox.md        # gitignored: user remarks auto-captured by hooks, waiting for triage.
@@ -57,12 +58,16 @@ Helper (path relative to this SKILL.md; works from anywhere inside the repo):
    it (entry point → … → storage/output), naming real files and folders; where to start reading;
    conventions or design choices that are not obvious from the file names. Write from what you read
    in the code — never guess — and say so when something is unclear.
-4. Tell the user in one line.
+4. Write the **"Project layout"** section of `topics/codebase.md`: one line per folder (or root
+   file) a newcomer needs, saying what lives there and where new code of that kind goes, e.g.
+   ``- `src/services/` — business logic (pricing, catalogue, supplier sync); new features start here.``
+   Take the folder list from the generated Layout; skip folders nobody edits (build output, vendored code).
+5. Tell the user in one line.
 
 Do the same when `index.md` has no Project summary or `codebase.md` has an empty "How it fits
-together" yet. Re-run the scan when lint says it is out of date or after big structural changes;
+together" or "Project layout" yet. Re-run the scan when lint says it is out of date or after big structural changes;
 it only rewrites its own block (between `scan:start`/`scan:end`), so everything you write outside
-it stays. After a re-scan that shows structural changes, update "How it fits together" too.
+it stays. After a re-scan that shows structural changes, update "How it fits together" and "Project layout" too.
 
 ## Hooks (if installed)
 
@@ -145,6 +150,8 @@ Every entry must make sense to someone who was **not** in this session and does 
 5. **One idea per entry, short.** A title plus 1–3 short lines. If it needs more, it belongs in
    `topics/<area>.md`, with a one-line pointer entry.
 6. **Tags go at the end** of the title line, after the sentence — they are for search, not for reading.
+   When the user talks in another language than the memory language, **always** add the words they
+   used as tags too (user said "upload produk" → `#upload #produk`), or prompt recall will miss the entry.
 7. **No session narration.** Not "I tried X, then Y, then found…" — write the conclusion that
    remains true after the session.
 
@@ -199,7 +206,7 @@ do, without opening the code or the chat?"* If not, rewrite it.
 ```
 ✓ Readable — a newcomer knows what happens, why, and what to do:
 ```
-1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api @src/sync/ (agent, seen: 1)
+1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api #produk @src/sync/ (agent, seen: 1)
    Why: it allows about 60 requests per minute per key; bulk product uploads exceeded that.
    Do instead: wait 1 second between requests in every create/publish loop (see syncProducts()).
 - 2026-10-14 · Keep the legacy auth module for now, because the mobile app v2 still logs in through /v1/login. #auth @src/auth/legacy/ #hold (user)
@@ -302,7 +309,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 | "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. |
 | "update memory" | Capture step for the whole session + inbox triage. |
 | "rapikan memori / clean up memory" | Full consolidation + lint, report changes. |
-| "scan project / scan ulang / index ulang" | `mem.sh scan`, then update Project summary, Key facts and "How it fits together" if the scan shows changes; report in one line. |
+| "scan project / scan ulang / index ulang" | `mem.sh scan`, then update Project summary, Key facts, "How it fits together" and "Project layout" if the scan shows changes; report in one line. |
 | "jangan dicatat / don't save this" | Don't write it; remove it from the inbox if captured. |
 
 ## 5. Reporting
