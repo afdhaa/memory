@@ -68,6 +68,7 @@ This project keeps persistent memory in `.memory/` (Markdown, shared by all agen
 - Before editing an area: `bash .agents/skills/project-memory/scripts/mem.sh path <file>`; ask before touching anything tagged `#hold`.
 - While working: record decisions, user corrections and gotchas immediately. Before finishing: update `.memory/progress.md`.
 - Write memory in English (unless `.memory/index.md` sets another `Memory language:`), in plain, specific sentences without filler — see the skill's references/writing.md.
+- If `.memory/index.md` Rules or `~/.agents/memory/user.md` say `Memory writes: confirm`, record the user's own instructions and corrections right away, but only propose what you concluded yourself (gotchas, decisions, progress) at the end of the task and write only what the user approves.
 - Never write secrets into memory.
 <!-- project-memory:end -->
 MD

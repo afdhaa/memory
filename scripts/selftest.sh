@@ -112,6 +112,21 @@ o="$(H stop claude "$(J st ',"stop_hook_active":false')")"; check "no new change
 sleep 1; echo z >> src/app.js; sleep 1; echo "- progress" >> .memory/progress.md
 o="$(H stop codex "$(J st ',"stop_hook_active":false')")"; check "memory updated after change: silent" '[ "$o" = "{}" ]' "$o"
 
+echo "• write mode"
+MM=".agents/skills/project-memory/scripts/mem.sh"
+o="$(bash $MM mode)"; check "default write mode is auto" 'printf "%s" "$o" | grep -q "write mode: auto"' "$o"
+bash $MM mode confirm >/dev/null
+o="$(H session-start claude "$(J cm ',"source":"startup"')")"; check "confirm mode announced at session start" 'printf "%s" "$o" | grep -q "CONFIRM mode"' "$o"
+o="$(H prompt claude "$(J cm ',"prompt":"jangan pakai axios di project ini"')")"; check "confirm mode: user corrections are still recorded right away" 'printf "%s" "$o" | grep -q "record it now"' "$o"
+sleep 1; echo w >> src/app.js
+o="$(H stop claude "$(J cm ',"stop_hook_active":false')")"; check "confirm mode: stop asks for a proposal, not a write" 'printf "%s" "$o" | grep -q "Confirm mode: record the user" && printf "%s" "$o" | grep -q "do NOT write it yet"' "$o"
+bash $MM mode auto >/dev/null; bash $MM mode confirm --global >/dev/null
+o="$(bash $MM mode)"; check "project mode wins over the global one" 'printf "%s" "$o" | grep -q "write mode: auto" && printf "%s" "$o" | grep -q "user memory: confirm"' "$o"
+mkdir -p .memory && printf -- '- 2026-10-21 · proposed → gotchas.md: **[2026-10-21] Waiting entry** #x\n' > .memory/inbox.md
+o="$(bash $MM lint 2>&1)"; check "lint: pending proposals are info, not an issue" 'printf "%s" "$o" | grep -q "1 proposal(s) waiting" && ! printf "%s" "$o" | grep -q "untriaged"' "$o"
+rm -f .memory/inbox.md
+grep -v 'Memory writes:' "$PM_USER_MEMORY" > u.tmp && mv u.tmp "$PM_USER_MEMORY"; git checkout -q -- .memory/index.md src/app.js
+
 echo "• lint & secrets"
 M=".agents/skills/project-memory/scripts/mem.sh"
 o="$(bash $M lint 2>&1)"

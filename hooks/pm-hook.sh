@@ -45,6 +45,16 @@ ROOT="$CWD"
 while [ "$ROOT" != "/" ] && [ -n "$ROOT" ] && [ ! -d "$ROOT/.memory" ]; do ROOT="$(dirname "$ROOT")"; done
 [ -d "$ROOT/.memory" ] || emit_empty
 MEM="$ROOT/.memory"
+# write mode: "Memory writes: confirm|auto" in index.md Rules (project) wins over user.md (all projects); default auto
+write_mode() {
+  local f m
+  for f in "$MEM/index.md" "$USER_MEM"; do
+    m="$(grep -iE '^[[:space:]]*[-*][[:space:]]*Memory writes:[[:space:]]*(auto|confirm)' "$f" 2>/dev/null | head -n1 | tr 'A-Z' 'a-z')"
+    case "$m" in *confirm*) echo confirm; return;; *auto*) echo auto; return;; esac
+  done
+  echo auto
+}
+MODE="$(write_mode)"
 STATS="$MEM/.stats.tsv"     # gitignored: date <TAB> hash of entry line, one row per injection
 
 SID="$(json_str session_id)"; SID="${SID//[^A-Za-z0-9_-]/}"; [ -n "$SID" ] || SID="nosession"
@@ -109,13 +119,17 @@ $files"
     ctx="$ctx
 [project-memory] .memory/topics/codebase.md is missing explanations. Early in this session, read its generated facts, the README and the main entry points, then write $cbm. Tell the user in one line."
   fi
+  [ "$MODE" = confirm ] && ctx="$ctx
+[project-memory] Memory writes: CONFIRM mode. Write the user's own corrections, standing instructions and explicit requests (\"remember…\", \"ingat…\", \"catat…\") right away. Everything you conclude yourself (gotchas, decisions, progress, topics, procedures, codebase.md) you only propose: at the end of a task, list the exact entries in one numbered message and write only what the user approves. Keep unanswered proposals in .memory/inbox.md."
   if [ -f "$MEM/inbox.md" ]; then
     n="$(grep -c '^- ' "$MEM/inbox.md" 2>/dev/null)"; n="${n:-0}"
     [ "$n" -gt 0 ] && ctx="$ctx
 [project-memory] .memory/inbox.md holds $n captured user remark(s) that may be corrections. Triage them now: record durable ones (gotchas.md User directives, index.md Rules, or user memory if they apply to every project), skip duplicates and one-offs, then empty the inbox. Report in one line."
+    [ "$n" -gt 0 ] && [ "$MODE" = confirm ] && ctx="$ctx
+[project-memory] Confirm mode: lines marked \"proposed\" in the inbox are entries the user has not answered yet. Ask about them (and about the remarks) in one numbered message; write only what they approve."
   fi
   [ "$SOURCE" = "compact" ] && ctx="$ctx
-[project-memory] The conversation was just compacted. If the summary contains decisions, user corrections or progress that are not yet in .memory/, record them now before continuing."
+[project-memory] The conversation was just compacted. If the summary contains decisions, user corrections or progress that are not yet in .memory/, record them now before continuing (confirm mode: add them to your next memory proposal instead)."
   printf '{"systemMessage":"📝 project-memory loaded","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(json_escape "$ctx")"
   ;;
 # ---------------------------------------------------------------------------
@@ -288,6 +302,7 @@ stop)
   count="$(printf '%s\n' "$changed" | wc -l | tr -d ' ')"
   touch "$STATE/nudged"; echo $((nudges + 1)) > "$STATE/nudges"
   reason="[project-memory] ${count} file(s) changed since .memory/ was last updated. Before stopping: if this work produced a decision, a user correction, a gotcha or a reusable procedure, record it in .memory/ following the project-memory skill, and update .memory/progress.md. If nothing is worth recording, do not edit anything; just end your reply with: memory: nothing new."
+  [ "$MODE" = confirm ] && reason="[project-memory] ${count} file(s) changed since .memory/ was last updated. Confirm mode: record the user's own corrections and instructions now if they are not in memory yet. If this work produced a decision, a gotcha, a reusable procedure or progress of your own worth keeping, do NOT write it yet. End your reply with a numbered memory proposal (target file + the exact entry) and ask the user which to save; save unanswered proposals as one line each in .memory/inbox.md. If nothing is worth recording, end your reply with: memory: nothing new."
   printf '{"decision":"block","reason":"%s"}\n' "$(json_escape "$reason")"
   ;;
 *) emit_empty ;;

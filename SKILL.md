@@ -2,10 +2,10 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "review memory", "cek memori", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.7.1
+  version: 3.8.0
 ---
 
-# Project Memory (v3.7)
+# Project Memory (v3.8)
 
 Every coding agent working in this repo shares one long-term memory, kept as Markdown.
 No server, no database: the files are the memory, `scripts/mem.sh` and `grep` are the
@@ -41,6 +41,7 @@ Helper (path relative to this SKILL.md; works from anywhere inside the repo):
 - `bash scripts/mem.sh search <words…>` — ranked search (project memory + user memory)
 - `bash scripts/mem.sh path <file>` — entries tagged for a file or folder
 - `bash scripts/mem.sh lint` — sizes, caps, secrets, map gaps, missing @paths, stale and duplicate entries, filler words
+- `bash scripts/mem.sh mode [auto|confirm] [--global]` — show or set the write mode (see *Write mode*)
 - `bash scripts/mem.sh review` — unconfirmed agent entries waiting for the user, oldest first
 - `bash scripts/mem.sh stats` — counts per file and hook usage
 - `bash scripts/mem.sh scan` — index the repo: writes the generated facts block of `topics/codebase.md`,
@@ -104,7 +105,7 @@ Without hooks (OpenCode, Antigravity, or `PM_HOOKS=off`), do all of the below yo
 
 ## 2. Capture
 
-Write **immediately** — not only at the end — when:
+Write **immediately** — not only at the end — when (in *confirm* mode, only the user's own words are written at once; propose your own conclusions — see *Write mode*):
 
 | Event | Where |
 |---|---|
@@ -121,7 +122,8 @@ ask once. Never copy project secrets, names of private systems or client data in
 
 ### Inbox triage
 
-`inbox.md` holds raw user remarks captured by the prompt hook (secrets redacted). For each
+`inbox.md` holds raw user remarks captured by the prompt hook (secrets redacted) and, in confirm
+mode, proposals the user has not answered yet (lines with `proposed →`; ask before writing those). For each
 item: if durable, record it in the right place (table above), rewritten as a clear,
 self-contained entry (see *Writing*) — never paste the raw remark. If it is already
 recorded, a one-off, or not a correction, drop it. Then delete the triaged items (empty the file). Report in one line, e.g. `📝 inbox: 2 recorded, 3 dropped`.
@@ -227,6 +229,34 @@ that comes from **your own** conclusion — not from the user — starts as unco
 - `mem.sh review` lists unconfirmed entries with their age; `mem.sh lint` flags those older than
   30 days (`PM_UNCONFIRMED_DAYS`) — confirm them, or remove them if they no longer hold.
 
+### Write mode — auto or confirm
+
+The user chooses whether you write memory directly or ask first. The mode comes from a line
+`- Memory writes: auto` or `- Memory writes: confirm` in `index.md` Rules (this project), which wins
+over the same line in `user.md` (all projects). No line means **auto**. `mem.sh mode` shows the
+current mode; set it only when the user asks ("tanya dulu sebelum mencatat", "mode konfirmasi",
+"ask before saving memory" → `mem.sh mode confirm`; "mode otomatis" → `mem.sh mode auto`; add
+`--global` when they want it for every project).
+
+**auto** — everything above: write when it happens, report in one line.
+
+**confirm** — what the user tells you is written right away; what **you** conclude is proposed first.
+- **Write directly** (the user's own words are the approval): explicit requests ("remember…",
+  "ingat…", "catat…", "forget…", "lupakan…") and the user's corrections or standing instructions
+  ("don't use axios", "jangan…", "selalu…") — recorded as `(user, …)` entries, reported as in auto mode.
+- **Propose first** everything else: your own gotchas, decisions, `progress.md`, topics, procedures,
+  `codebase.md` sections.
+- Do the task first; do not interrupt the work to ask about memory.
+- At the end of the task, end your reply with **one numbered proposal**: for each item the target
+  file and the exact entry as it would be written (for `progress.md`, the new content in 2–4 lines).
+  Ask how to proceed, e.g. *"Save? Reply 'all', '1,3', '2: <change>' or 'none'."*
+- Write only what the user approves, exactly as approved. An entry the user approved is
+  confirmed: write it without `unconfirmed`.
+- If the user moves on without answering, save each unanswered item as one line in `inbox.md`:
+  `- YYYY-MM-DD · proposed → gotchas.md: **Title…** … Why: … Do instead: …`. Ask about them again
+  at the next session start (inbox triage) — never write them without a yes.
+- Reporting line: `📝 memory: 3 proposed (waiting for your answer)`.
+
 ## 3. Curate (keep it small and true)
 
 Every time you edit a memory file: keep `gotchas.md` sections sorted by importance and at
@@ -254,6 +284,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 | "what do you know about X / apa yang kamu tahu soal X" | `mem.sh search X`, summarise with file references. |
 | "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`, confirm. "unfreeze" removes `#hold`. |
 | "update memory" | Capture step for the whole session + inbox triage. |
+| "mode konfirmasi / ask before saving memory" | `mem.sh mode confirm` (`--global` for every project), confirm in one line. "mode otomatis" → `mem.sh mode auto`. |
 | "review memory / cek memori" | `mem.sh review`; show each unconfirmed entry in one plain line and ask: keep, fix or drop. Apply the answers. |
 | "rapikan memori / clean up memory" | Full consolidation + lint, report changes. |
 | "scan project / scan ulang / index ulang" | `mem.sh scan`, then update Project summary, Key facts, "How it fits together" and "Project layout" if the scan shows changes; report in one line. |
@@ -261,7 +292,7 @@ Run `mem.sh lint` after larger edits and do a full consolidation when it reports
 
 ## 5. Reporting
 
-After writing to memory, end your reply with one short line the user can veto, e.g.
+After writing to memory (or proposing, in confirm mode), end your reply with one short line the user can veto, e.g.
 `📝 memory: +1 gotcha (#test), decision updated (#auth), progress`. Don't narrate reads.
 
 ## 6. Team use

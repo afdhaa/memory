@@ -5,6 +5,7 @@
 #   mem.sh lint                 size, caps, secrets, map, missing @paths, stale & duplicate entries, filler wording
 #   mem.sh secrets [--staged]   secret scan only (exit 1 if found); --staged = what git would commit
 #   mem.sh review               unconfirmed agent entries, oldest first (confirm or remove them with the user)
+#   mem.sh mode [auto|confirm] [--global]  show or set the write mode (confirm = propose entries, write after a yes)
 #   mem.sh stats                entry counts per file + injection hits
 #   mem.sh approve <path> [min]  allow edits in a #hold area for N minutes (default 60) — only after the user approves
 #   mem.sh scan [--print]       index the repo into .memory/topics/codebase.md (+ Map, empty Key facts);
@@ -193,7 +194,12 @@ lint)
     [ "$n" -gt "${PM_SCAN_STALE:-150}" ] && w ".memory/topics/codebase.md was scanned $n commits ago → run mem.sh scan"
   fi
   # inbox waiting
-  [ -f .memory/inbox.md ] && { n=$(grep -c '^- ' .memory/inbox.md); [ "$n" -gt 0 ] && w ".memory/inbox.md has $n untriaged item(s)"; }
+  # (proposals waiting for the user's answer in confirm mode are expected: info, not an issue)
+  if [ -f .memory/inbox.md ]; then
+    np=$(grep -c '^- .*proposed →' .memory/inbox.md); n=$(( $(grep -c '^- ' .memory/inbox.md) - np ))
+    [ "$n" -gt 0 ] && w ".memory/inbox.md has $n untriaged item(s)"
+    [ "$np" -gt 0 ] && echo "ℹ .memory/inbox.md has $np proposal(s) waiting for the user's answer (confirm mode)"
+  fi
   # git hygiene
   if git rev-parse --git-dir >/dev/null 2>&1; then
     for f in .memory/local.md .memory/inbox.md .memory/.stats.tsv .memory/.approvals; do
@@ -201,6 +207,34 @@ lint)
   fi
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
   [ "$issues" -eq 0 ]
+  ;;
+mode)
+  want=""; target=.memory/index.md; heading="## Rules & preferences"
+  for a in "$@"; do case "$a" in auto|confirm) want="$a" ;; --global) target="$USER_MEM"; heading="## Workflow" ;;
+    *) echo "usage: mem.sh mode [auto|confirm] [--global]"; exit 1 ;; esac; done
+  cur() { grep -iE '^[[:space:]]*[-*][[:space:]]*Memory writes:[[:space:]]*(auto|confirm)' "$1" 2>/dev/null | head -n1 | grep -ioE 'auto|confirm' | tr 'A-Z' 'a-z'; }
+  if [ -z "$want" ]; then
+    p="$(cur .memory/index.md)"; u="$(cur "$USER_MEM")"
+    echo "write mode: ${p:-${u:-auto}}  (project: ${p:-not set}; user memory: ${u:-not set}; default: auto)"; exit 0
+  fi
+  [ -f "$target" ] || { mkdir -p "$(dirname "$target")"; printf '%s\n' "$heading" > "$target"; }
+  line="- Memory writes: $want"
+  [ "$want" = confirm ] && line="$line (propose memory entries and write them only after the user says yes)"
+  [ "$want" = auto ] && line="$line (record memory directly and report it in one line)"
+  if grep -qiE '^[[:space:]]*[-*][[:space:]]*Memory writes:' "$target"; then
+    L="$line" awk 'BEGIN { IGNORECASE = 1 } tolower($0) ~ /^[[:space:]]*[-*][[:space:]]*memory writes:/ && !done { print ENVIRON["L"]; done = 1; next } { print }' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+  else
+    # append at the end of the heading's section (after its comment), or add the section
+    L="$line" awk -v h="$heading" '
+      { A[++n] = $0 } END {
+        for (i = 1; i <= n; i++) if (A[i] == h) s = i
+        if (!s) { for (i = 1; i <= n; i++) print A[i]; print ""; print h; print ENVIRON["L"]; exit }
+        e = n + 1; for (i = s + 1; i <= n; i++) if (A[i] ~ /^## /) { e = i; break }
+        last = s; c = 0
+        for (i = s + 1; i < e; i++) { if (A[i] ~ /<!--/) c = 1; if (A[i] ~ /[^[:space:]]/) last = i; if (c && A[i] ~ /-->/) c = 0 }
+        for (i = 1; i <= last; i++) print A[i]; print ENVIRON["L"]; for (i = last + 1; i <= n; i++) print A[i] }' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
+  fi
+  echo "✓ write mode: $want (${target/#$HOME/~})"
   ;;
 review)
   uc="$(unconfirmed "$(date +%Y-%m-%d)")"

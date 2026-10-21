@@ -1,4 +1,4 @@
-# project-memory v3.7.1
+# project-memory v3.8
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -59,7 +59,7 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 90 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs 96 automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).
@@ -85,7 +85,7 @@ your-project/
 │   ├── procedures/
 │   │   └── <name>.md           # step-by-step workflows that repeat (release, migration…)
 │   ├── local.md                # personal notes for this project      — gitignored
-│   ├── inbox.md                # remarks captured from chat, to triage — gitignored
+│   ├── inbox.md                # remarks captured from chat, unanswered proposals — gitignored
 │   └── .stats.tsv              # which entries the hooks surfaced      — gitignored
 ├── .agents/skills/project-memory/   # the skill itself (SKILL.md, references/, scripts/, hooks/)
 ├── .claude/skills/project-memory    # symlink to the skill, for Claude Code
@@ -202,6 +202,36 @@ Ask **"review memory"** (or "cek memori") to go through them; `mem.sh lint` flag
 The labels `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` are always in English because the
 hooks recognise them. Ask the agent to **"clean up memory"** to rewrite (and translate) older entries.
 
+### Auto or confirm mode
+
+| Mode | What the agent does |
+|---|---|
+| `auto` (default) | Writes memory as it works and reports each write in one line (`📝 memory: +1 gotcha …`) so you can veto it. |
+| `confirm` | Writes what **you** tell it (instructions, corrections, "remember…") right away. What it **concludes itself** (gotchas, decisions, progress, codebase notes) it only proposes: at the end of the task it lists the exact entries, numbered, and writes only what you approve. |
+
+**Switch modes** in one of three ways:
+
+1. **Ask the agent:** "ask before saving memory" / "mode konfirmasi" switches to confirm; "save memory
+   automatically" / "mode otomatis" switches back. Add "for all projects" / "untuk semua project" to
+   make it global.
+2. **Run the helper:**
+
+       bash .agents/skills/project-memory/scripts/mem.sh mode                    # show the current mode
+       bash .agents/skills/project-memory/scripts/mem.sh mode confirm            # this project
+       bash .agents/skills/project-memory/scripts/mem.sh mode auto               # back to automatic
+       bash .agents/skills/project-memory/scripts/mem.sh mode confirm --global   # all your projects
+
+3. **Edit the line yourself:** `- Memory writes: confirm` (or `auto`) under Rules in
+   `.memory/index.md` for this project, or under Workflow in `~/.agents/memory/user.md` for all
+   projects. If both exist, the project setting wins. No line means `auto`.
+
+The new mode applies from the next message; hooks pick it up at once.
+
+**Answering a proposal** in confirm mode: reply `all`, `1,3`, `2: <change>` or `none`. Your own
+instructions ("don't use axios", "always…", "remember…", "catat…") are written right away, since
+they come from you. Proposals you leave unanswered wait in `.memory/inbox.md` (not committed) and come back at
+the next session; nothing is written without your yes.
+
 ### Talking to the agent
 
 The skill understands both English and Indonesian phrasing.
@@ -214,6 +244,7 @@ The skill understands both English and Indonesian phrasing.
 | "what do you know about X" | summary from memory with file references |
 | "freeze / don't touch folder X" / "jangan sentuh …" | area frozen (`#hold`); the agent must ask before editing it |
 | "update memory" | records everything worth keeping from this session |
+| "ask before saving memory" / "mode konfirmasi" | confirm mode: the agent proposes entries and writes only what you approve ("mode otomatis" switches back) |
 | "review memory" / "cek memori" | walks you through unconfirmed agent entries: keep, fix or drop |
 | "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites cryptic or padded entries, re-checks with lint |
 | "rescan the project" / "scan ulang" | `mem.sh scan`, then updates Project summary, Key facts and "How it fits together" if needed |
@@ -225,6 +256,7 @@ The skill understands both English and Indonesian phrasing.
     bash .agents/skills/project-memory/scripts/mem.sh path src/api/
     bash .agents/skills/project-memory/scripts/mem.sh lint      # also: missing @paths, stale entries, duplicates, filler words
     bash .agents/skills/project-memory/scripts/mem.sh review    # unconfirmed agent entries, oldest first
+    bash .agents/skills/project-memory/scripts/mem.sh mode confirm   # ask before writing memory (auto = default)
     bash .agents/skills/project-memory/scripts/mem.sh stats
     bash .agents/skills/project-memory/scripts/mem.sh scan      # re-index the repo
     bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # lift #hold for 30 minutes

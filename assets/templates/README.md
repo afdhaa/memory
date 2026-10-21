@@ -14,7 +14,7 @@ and is plain Markdown: read it, review it in pull requests, and edit it like any
 | `topics/<area>.md` | Deeper notes on one area (auth, billing, deploy…). | agents and people |
 | `procedures/<name>.md` | Step-by-step workflows that are repeated, such as a release. | agents and people |
 | `local.md` | Personal notes for this project. Not committed. | you |
-| `inbox.md` | Remarks captured automatically from chat, waiting to be recorded or dropped. Not committed. | hooks |
+| `inbox.md` | Remarks captured automatically from chat, and (in confirm mode) proposed entries nobody has answered yet. Not committed. | hooks, agents |
 
 ## Conventions
 
@@ -25,6 +25,8 @@ and is plain Markdown: read it, review it in pull requests, and edit it like any
   conclusion that nobody has checked yet. Agents verify them before relying on them. To confirm
   one, delete `, unconfirmed` (for example while reviewing a pull request); if it is wrong, fix or
   delete the entry. `mem.sh review` lists them.
+- Write mode: agents write memory directly (`auto`, default) or write your instructions directly but
+  propose their own conclusions and write only what you approve (`confirm`): `mem.sh mode confirm`. It is the line `- Memory writes: …` in `index.md`.
 - `#hold` on a decision freezes its `@path`: agents must ask before changing anything there.
 - Reversed decisions are struck through (`~~…~~ superseded …`), never deleted.
 - Never write secrets here. Write where a secret lives (`.env` → `API_KEY`), not its value. A
