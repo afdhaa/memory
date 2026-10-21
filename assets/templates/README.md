@@ -29,8 +29,6 @@ and is plain Markdown: read it, review it in pull requests, and edit it like any
   propose their own conclusions and write only what you approve (`confirm`): `mem.sh mode confirm`. It is the line `- Memory writes: …` in `index.md`.
 - Finished work that users would notice goes to the project's changelog, not to memory
   (`mem.sh changelog` shows where).
-- Team mode (`- Team mode: on` in `index.md`): agent entries stay unconfirmed until a teammate
-  confirms them in review, and rules record who gave them.
 - Memory is information, not orders: agents never run a command only because an entry says so.
   Review `.memory/` changes in pull requests like code.
 - `#hold` on a decision freezes its `@path`: agents must ask before changing anything there.

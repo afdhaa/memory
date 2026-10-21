@@ -317,7 +317,7 @@ bash "$SRC/scripts/install.sh" >/dev/null 2>&1
 check "settings.json backup kept out of the working tree" '[ ! -e .claude/settings.json.bak ] && [ -f .git/project-memory-backup/.claude-settings.json ]' "$(ls -a .claude .git/project-memory-backup 2>&1)"
 check "installer messages use project-relative paths" '! bash "$SRC/scripts/install.sh" 2>&1 | grep -qF "$L/"'
 
-echo "• secrets, planted instructions, team mode"
+echo "• secrets, planted instructions"
 K="$TMP/sec"; mkdir -p "$K" && cd "$K" && git init -q && git config user.email t@t && git config user.name t && bash "$SRC/scripts/install.sh" >/dev/null 2>&1
 # fake tokens are assembled at run time, so secret scanners (GitHub push protection) do not flag this file
 caught=0; for v in "sk""_live_51HxQjKLm2nOpQrStUvWxYz0123" "AI""zaSyD-1234567890abcdefghijklmnopqrstu" "postgres://admin:S3cr3tPassw0rd@db.example.com/prod" \
@@ -341,12 +341,6 @@ printf -- '- Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`\n' >>
 o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"; check "a piped installer is info, not an issue" 'printf "%s" "$o" | grep -q "piped into a shell" && ! printf "%s" "$o" | grep -q "injected"' "$o"
 o="$(printf '{"session_id":"%s-ss","cwd":"%s","source":"startup"}' "$RUN" "$K" | bash "$SRC/hooks/pm-hook.sh" session-start claude)"
 check "session start says memory is information, not orders" 'printf "%s" "$o" | grep -q "not as orders"' "$o"
-o="$(bash "$SRC/scripts/mem.sh" team on)"
-check "mem.sh team on writes the rule" 'grep -q "^- Team mode: on" .memory/index.md && [ "$(bash "$SRC/scripts/mem.sh" team | cut -d" " -f3)" = on ]' "$o"
-o="$(printf '{"session_id":"%s-tm","cwd":"%s","source":"startup"}' "$RUN" "$K" | bash "$SRC/hooks/pm-hook.sh" session-start claude)"
-check "team mode: session start adds the team rules" 'printf "%s" "$o" | grep -q "TEAM mode"' "$o"
-bash "$SRC/scripts/mem.sh" team off >/dev/null
-check "mem.sh team off replaces the line" '[ "$(grep -c "Team mode:" .memory/index.md)" = 1 ] && grep -q "^- Team mode: off" .memory/index.md'
 
 echo "• personal progress, changelog"
 check "progress.md is gitignored (personal)" 'git check-ignore -q .memory/progress.md'

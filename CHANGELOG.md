@@ -3,6 +3,12 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.12.0
+- Team mode removed (`mem.sh team`, the `Team mode:` rule and its hook message). With `progress.md`
+  personal and finished work in the project's changelog, it no longer solved a problem. Agent
+  entries are confirmed as before (user approval, recurrence or evidence); a `- Team mode:` line
+  left in `index.md` is ignored and can be deleted.
+
 ## 3.11.0
 Tested on six large open-source repositories (next.js, django, home-assistant, ruff, langchain,
 supabase), with a security review.

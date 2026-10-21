@@ -1,4 +1,4 @@
-# project-memory v3.11
+# project-memory v3.12
 
 Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
 shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
@@ -246,7 +246,6 @@ The skill understands both English and Indonesian phrasing.
 | "freeze / don't touch folder X" / "jangan sentuh …" | area frozen (`#hold`); the agent must ask before editing it |
 | "update memory" | records everything worth keeping from this session |
 | "ask before saving memory" / "mode konfirmasi" | confirm mode: the agent proposes entries and writes only what you approve ("mode otomatis" switches back) |
-| "team mode" / "mode tim" | team mode on: entries confirmed in PR review, rules record who gave them |
 | "review memory" / "cek memori" | walks you through unconfirmed agent entries: keep, fix or drop |
 | "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites cryptic or padded entries, re-checks with lint |
 | "rescan the project" / "scan ulang" | `mem.sh scan`, then updates Project summary, Key facts and "How it fits together" if needed |
@@ -259,7 +258,6 @@ The skill understands both English and Indonesian phrasing.
     bash .agents/skills/project-memory/scripts/mem.sh lint      # also: missing @paths, stale entries, duplicates, filler words
     bash .agents/skills/project-memory/scripts/mem.sh review    # unconfirmed agent entries, oldest first
     bash .agents/skills/project-memory/scripts/mem.sh mode confirm   # ask before writing memory (auto = default)
-    bash .agents/skills/project-memory/scripts/mem.sh team on        # team mode (see Teams)
     bash .agents/skills/project-memory/scripts/mem.sh changelog      # where finished work is recorded in this project
     bash .agents/skills/project-memory/scripts/mem.sh stats
     bash .agents/skills/project-memory/scripts/mem.sh scan      # re-index the repo
@@ -341,17 +339,6 @@ project's changelog, the way the project already keeps it — `mem.sh changelog`
 
 Projects with `.memory/progress.md` committed by an earlier version: `git rm --cached .memory/progress.md`
 (the installer and lint remind you).
-
-**Team mode** — for teams where several people work on the same repository at once:
-
-    bash .agents/skills/project-memory/scripts/mem.sh team on     # or: tell the agent "team mode"
-
-It writes `- Team mode: on` into `.memory/index.md` Rules (commit it so the whole team gets it). Then:
-
-| Without team mode | With team mode |
-|---|---|
-| An agent's entry is confirmed once the agent verified it (for example by running a test) | It stays `unconfirmed` with the evidence in `Why:`, until a teammate confirms it in the PR review |
-| A rule records `(user, date)` | It records who gave it, `(user: <name>, date)`, and the agent asks whether it is for the whole team or only for that person |
 
 ## Security and privacy
 

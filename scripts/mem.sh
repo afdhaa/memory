@@ -6,7 +6,6 @@
 #   mem.sh secrets [--staged]   secret scan only (exit 1 if found); --staged = what git would commit
 #   mem.sh review               unconfirmed agent entries, oldest first (confirm or remove them with the user)
 #   mem.sh mode [auto|confirm] [--global]  show or set the write mode (confirm = propose entries, write after a yes)
-#   mem.sh team [on|off]        show or set team mode (entries confirmed in review, rules record who gave them)
 #   mem.sh changelog            where finished, user-visible work is recorded in this project (changelog file, fragments or generated)
 #   mem.sh stats                entry counts per file + injection hits
 #   mem.sh approve <path> [min]  allow edits in a #hold area for N minutes (default 60) — only after the user approves
@@ -269,17 +268,6 @@ lint)
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
   [ "$issues" -eq 0 ]
   ;;
-team)
-  cur="$(awk 'tolower($0) ~ /^[[:space:]]*[-*][[:space:]]*team mode:[[:space:]]*(on|off)/ { l = tolower($0); sub(/^[^:]*:[[:space:]]*/, "", l); print substr(l, 1, (l ~ /^on/) ? 2 : 3); exit }' .memory/index.md 2>/dev/null)"
-  case "${1:-}" in
-    "") echo "team mode: ${cur:-off}  (index.md; set with: mem.sh team on|off)"; exit 0 ;;
-    on) line="- Team mode: on (agent entries stay unconfirmed until a teammate confirms them in review; rules record who gave them)" ;;
-    off) line="- Team mode: off" ;;
-    *) echo "usage: mem.sh team [on|off]"; exit 1 ;; esac
-  set_rule .memory/index.md "## Rules & preferences" "Team mode" "$line"
-  echo "✓ team mode: $1 (.memory/index.md)"
-  exit 0
-  ;;
 changelog)
   . "$HERE/changelog.sh"; IFS="$(printf '\t')" read -r kind what how < <(changelog_info "$ROOT")
   case "$kind" in fragments) echo "changelog: fragments ($what)";; generated) echo "changelog: generated from commits ($what)";;
@@ -326,5 +314,5 @@ stats)
   [ -f .memory/.stats.tsv ] && echo "hook injections recorded: $(wc -l < .memory/.stats.tsv | tr -d ' ') (last: $(tail -n1 .memory/.stats.tsv | cut -f1))"
   [ -f "$USER_MEM" ] && echo "user memory: $USER_MEM ($(wc -l < "$USER_MEM" | tr -d ' ') lines)"
   ;;
-*) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac
