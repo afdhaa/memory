@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: selftest (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux, bash 5, mawk
+            os: ubuntu-latest
+            awk: mawk
+          - name: linux, bash 5, gawk
+            os: ubuntu-latest
+            awk: gawk
+          # what most Mac users have: the system bash 3.2 and BWK awk, not Homebrew's
+          - name: macos, bash 3.2, BWK awk
+            os: macos-latest
+            awk: /usr/bin/awk
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the shell and awk under test
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          if [ "$RUNNER_OS" = macOS ]; then ln -sf /bin/bash "$RUNNER_TEMP/bin/bash"; fi
+          case "${{ matrix.awk }}" in
+            gawk) sudo apt-get install -y -qq gawk >/dev/null ;;
+          esac
+          ln -sf "$(command -v ${{ matrix.awk }})" "$RUNNER_TEMP/bin/awk"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Self-test
+        run: |
+          bash --version | head -n1
+          git config --global user.name ci && git config --global user.email ci@example.com
+          bash scripts/selftest.sh
+
+      - name: npm package contents
+        if: runner.os == 'Linux' && matrix.awk == 'mawk'
+        run: npm pack --dry-run

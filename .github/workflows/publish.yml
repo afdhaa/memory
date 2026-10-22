@@ -1,0 +1,42 @@
+name: Publish to npm
+
+# Push a tag such as v3.14.2 to publish that version. Uses npm trusted publishing (OIDC):
+# no npm token is stored, and the package gets a provenance statement linking it to this
+# repository and this workflow run. Set it up once on npmjs.com: package Settings ->
+# Trusted Publisher -> GitHub Actions, repository afdhaa/memory, workflow publish.yml.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write   # lets npm verify that this run belongs to afdhaa/memory
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Tag, package.json and SKILL.md carry the same version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p 'require("./package.json").version')"
+          skill="$(sed -n 's/^  version: *//p' SKILL.md | head -n1)"
+          echo "tag $tag, package.json $pkg, SKILL.md $skill"
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$skill" ]
+
+      - name: Self-test
+        run: |
+          git config --global user.name ci && git config --global user.email ci@example.com
+          bash scripts/selftest.sh
+
+      - name: Publish
+        run: |
+          npm install -g npm@latest   # trusted publishing needs npm 11.5.1 or later
+          npm publish --provenance

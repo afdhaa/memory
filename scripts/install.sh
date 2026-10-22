@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# project-memory v3 installer
+# team-memory installer (installs the project-memory skill)
 #
 #   bash /path/to/project-memory/scripts/install.sh               # per project (run from project root)
 #   bash /path/to/project-memory/scripts/install.sh --no-hooks    # per project, instructions only
 #   bash /path/to/project-memory/scripts/install.sh --remove-hooks   # agent hooks + git pre-commit block
 #   bash /path/to/project-memory/scripts/install.sh --global      # skill for every project (no hooks)
+#   bash /path/to/project-memory/scripts/install.sh --here        # in a subfolder of a git repo (monorepo package), without asking
 #
 # Skill locations (Agent Skills / SKILL.md standard):
 #   Claude Code  : .claude/skills/   ~/.claude/skills/
@@ -17,9 +18,10 @@ set -euo pipefail
 
 NAME="project-memory"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODE="project"; HOOKS="yes"
+MODE="project"; HOOKS="yes"; HERE_OK=""
+VERSION="$(sed -n 's/^  version: *//p' "$SRC/SKILL.md" 2>/dev/null | head -n1)"
 for a in "$@"; do case "$a" in
-  --global) MODE="global" ;; --no-hooks) HOOKS="no" ;; --remove-hooks) MODE="remove-hooks" ;;
+  --global) MODE="global" ;; --no-hooks) HOOKS="no" ;; --remove-hooks) MODE="remove-hooks" ;; --here) HERE_OK=1 ;;
   -h|--help) sed -n '2,16p' "$0"; exit 0 ;; *) echo "unknown option: $a"; exit 1 ;; esac; done
 
 log() { local m="$*"; [ -n "${ROOT:-}" ] && m="${m//"$ROOT/"/}"; printf '  %s\n' "$m"; }   # paths inside the project are shown relative
@@ -168,11 +170,29 @@ if [[ "$MODE" == "global" ]]; then
   copy_skill "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills"
   copy_skill "$HOME/.gemini/antigravity/skills"
   ensure_user_memory
-  echo; echo "Done. Run this script without --global inside a project to add .memory/, the bootstrap lines and hooks."
+  echo; echo "Done. Inside a project, run the installer again without --global (npx team-memory) to add .memory/, the instructions and hooks."
   exit 0
 fi
 
-echo "Installing $NAME v3 into: $ROOT"
+# guard against running it in the wrong folder
+if [ "$(cd "$ROOT" && pwd -P)" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ] || [ "$ROOT" = "/" ]; then
+  echo "This is your home folder, not a project: nothing installed."
+  echo "Run it from the root of a project, or use --global to make the skill available in every project."
+  exit 1
+fi
+TOP="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$TOP" ] && [ "$(cd "$TOP" && pwd -P)" != "$(cd "$ROOT" && pwd -P)" ] && [ ! -d "$ROOT/.memory" ] && [ -z "$HERE_OK" ]; then
+  echo "You are in a subfolder of the git repository at $TOP."
+  echo "Memory normally lives at the repository root; a subfolder install is for one package of a monorepo."
+  if [ -t 0 ]; then
+    printf 'Install in this subfolder anyway? [y/N] '; read -r a || a=""
+    case "$a" in y|Y|yes) ;; *) echo "Nothing installed. Run it from $TOP, or add --here to install in this subfolder."; exit 1 ;; esac
+  else
+    echo "Installing here because there is no terminal to ask (add --here to silence this)."
+  fi
+fi
+[ -z "$TOP" ] && echo "Note: this folder is not a git repository, so memory is not shared through git and the pre-commit secret check is skipped."
+echo "Installing team-memory ${VERSION:-} (skill: $NAME) into: $ROOT"
 copy_skill "$ROOT/.agents/skills"
 link_skill "$ROOT/.claude/skills" "../../.agents/skills/$NAME"
 

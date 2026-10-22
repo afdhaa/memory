@@ -403,6 +403,18 @@ bash "$SRC/scripts/mem.sh" mode confirm >/dev/null; o="$(hs h3 ',"source":"start
 check "confirm mode: onboarding text is proposed, not written" 'printf "%s" "$o" | grep -q "propose this onboarding text"' "$o"
 cd "$S"
 
+echo "• installer guards"
+W="$TMP/guard"; mkdir -p "$W/home" "$W/repo/pkg"
+o="$(cd "$W/home" && HOME="$W/home" bash "$SRC/scripts/install.sh" 2>&1)"; r=$?
+check "refuses to install in the home folder" '[ "$r" = 1 ] && [ ! -e "$W/home/.memory" ] && printf "%s" "$o" | grep -q "home folder"' "$o"
+(cd "$W/repo" && git init -q)
+o="$(cd "$W/repo/pkg" && HOME="$W/home" bash "$SRC/scripts/install.sh" </dev/null 2>&1)"
+check "subfolder of a repo: warns, installs when nobody can be asked" 'printf "%s" "$o" | grep -q "subfolder of the git repository" && [ -d "$W/repo/pkg/.memory" ]' "$o"
+o="$(cd "$W/repo/pkg" && HOME="$W/home" bash "$SRC/scripts/install.sh" </dev/null 2>&1)"
+check "re-run in that subfolder: no warning once .memory/ is there" '! printf "%s" "$o" | grep -q "subfolder of the git repository"' "$o"
+check "banner shows the package version" 'printf "%s" "$o" | grep -q "Installing team-memory $(sed -n "s/^  version: *//p" "$SRC/SKILL.md")"' "$o"
+cd "$S"
+
 echo "• scan accuracy"
 Z="$TMP/flask"; mkdir -p "$Z/tests" "$Z/src/flask" && cd "$Z" && git init -q && git config user.email t@t && git config user.name t
 printf '[project]\nname = "Flask"\ndependencies = ["werkzeug", "pydantic"]\n' > pyproject.toml; printf 'flask\n' > requirements.txt

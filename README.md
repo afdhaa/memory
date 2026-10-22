@@ -52,12 +52,14 @@ your-project/
 |---|---|
 | `npx team-memory` | everything above, then a scan of the repository |
 | `npx team-memory --no-hooks` | the same, without agent hooks |
+| `npx team-memory --here` | install in a subfolder of a git repository (one package of a monorepo) without asking |
 | `npx team-memory --global` | the skill for every project, plus `user.md` (no `.memory/`, no hooks) |
 | `npx team-memory --remove-hooks` | removes the hooks and the pre-commit block; nothing else |
 | `npx team-memory selftest` | runs the test suite in a temporary repository |
 | `npx team-memory --version` | prints the version |
 
-Safe to re-run: `.memory/` and `user.md` are never overwritten, your own hooks and pre-commit hook are
+Run it from the root of the repository: in your home folder it refuses, and in a subfolder it asks
+first. Safe to re-run: `.memory/` and `user.md` are never overwritten, your own hooks and pre-commit hook are
 kept, and the previous `settings.json`/`hooks.json` is backed up in `.git/project-memory-backup/`.
 
 ## How it works
@@ -219,14 +221,21 @@ options as above.
 
 ## Development
 
-    bash scripts/selftest.sh          # must report 0 failed (bash 3.2 to 5, mawk, gawk and BWK awk)
+    bash scripts/selftest.sh          # must report 0 failed
 
-Release: bump the version in `SKILL.md` (`metadata.version`), `package.json` and `CHANGELOG.md`
-together (the self-test fails when they differ), commit, then:
+CI runs the self-test on every push and pull request: Linux with bash 5 (mawk and gawk) and macOS
+with the system bash 3.2 and BWK awk.
 
-    npm publish --dry-run             # the package holds only the skill files
-    npm publish                       # asks for the 2FA code
+**Release:** bump the version in `SKILL.md` (`metadata.version`), `package.json` and
+`CHANGELOG.md` together, commit, then push a tag:
+
     git tag vX.Y.Z && git push origin vX.Y.Z
+
+The *Publish to npm* workflow checks that the tag matches both files, runs the self-test and
+publishes with npm trusted publishing: no npm token is stored, and the npm page shows a provenance
+statement linking the package to this repository. One-time setup on npmjs.com: package
+**Settings → Trusted Publisher → GitHub Actions**, repository `afdhaa/memory`, workflow `publish.yml`.
+Without it, publish by hand with `npm publish` (asks for the 2FA code).
 
 ## License
 

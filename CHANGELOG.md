@@ -3,6 +3,15 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.14.2
+- CI: the self-test runs on every push and pull request on Linux (bash 5 with mawk and with gawk)
+  and on macOS with the system bash 3.2 and BWK awk.
+- Releases: pushing a `v*` tag publishes to npm from GitHub Actions with trusted publishing and
+  provenance (no npm token stored); the tag, `package.json` and SKILL.md must carry the same version.
+- Installer guards: refuses to install in the home folder; in a subfolder of a git repository it asks
+  first (`--here` skips the question, for one package of a monorepo); says when the folder is not a
+  git repository. The banner shows the package name and version.
+
 ## 3.14.1
 - README rewritten as the npm page: what it is and a quick start first, `npx team-memory` everywhere,
   stale parts removed (omp registry placeholder, `.bak` backups, clone paths).

@@ -1,6 +1,6 @@
 {
   "name": "team-memory",
-  "version": "3.14.1",
+  "version": "3.14.2",
   "description": "Shared project memory for your team and your coding agents: plain Markdown in your repo, no server. A skill for Claude Code, Codex, OpenCode, Antigravity and omp.",
   "keywords": [
     "ai-agents",
