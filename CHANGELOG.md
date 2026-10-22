@@ -4,6 +4,8 @@ All notable changes. Versions follow [semver](https://semver.org): minor for new
 patch for fixes and reorganisation.
 
 ## 3.14.0
+- Published on npm as `team-memory`: `npx team-memory` installs into the current project
+  (`--global`, `--no-hooks`, `--remove-hooks`, `selftest`, `--version`); README install section rewritten.
 - SKILL.md rewritten for the everyday loop: 341 → 145 lines (3,900 → 1,550 words), read at every
   task. Onboarding, re-scans, confirm mode, inbox triage, clean-up, user commands, team use and hook
   details moved to `references/workflows.md`, read only when needed. The Capture table now also

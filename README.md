@@ -6,11 +6,24 @@ Antigravity and Pi/omp. No server, database or container; the hooks and helpers 
 
 ## 1. Install
 
-Requires `bash`, `awk` and `git`. Runs on macOS and Linux.
+Requires `bash`, `awk` and `git`. Runs on macOS and Linux (Windows: inside WSL).
 
-### A. Per project (recommended)
+### A. Per project with npm (recommended)
 
-Clone once, then run the installer from the root of every project that should have memory:
+From the root of every project that should have memory:
+
+    cd ~/code/my-project
+    npx team-memory
+
+`npx` downloads the [`team-memory`](https://www.npmjs.com/package/team-memory) package and runs its
+installer; nothing is installed globally and node is not needed afterwards. Options go after the
+name (`npx team-memory --no-hooks`); `npx team-memory --version` prints the version and
+`npx team-memory selftest` checks that it works on your machine.
+
+The only official sources are the npm package `team-memory` and github.com/afdhaa/memory. A
+package under another name that claims to be this skill is not from this project.
+
+Without npm, clone the repository once and run its installer instead:
 
     git clone https://github.com/afdhaa/memory.git ~/tools/project-memory
     cd ~/code/my-project
@@ -36,11 +49,11 @@ What it creates:
 | `--global` | skill for all projects + user memory (no `.memory/`, no hooks) |
 
 Safe to re-run. `.memory/` and `user.md` are never overwritten; other hooks and an existing
-pre-commit hook are kept (JSON files get a `.bak` backup).
+pre-commit hook are kept (the previous `settings.json`/`hooks.json` is backed up in `.git/project-memory-backup/`).
 
 ### B. Global (all projects, no hooks)
 
-    bash ~/tools/project-memory/scripts/install.sh --global
+    npx team-memory --global          # or: bash ~/tools/project-memory/scripts/install.sh --global
 
 Copies the skill to `~/.agents/skills`, `~/.claude/skills`, `~/.config/opencode/skills` and
 `~/.gemini/antigravity/skills`. In a project without `.memory/`, the agent creates it from the
@@ -59,7 +72,7 @@ omp asks for confirmation because the skill ships scripts.
 
     bash .agents/skills/project-memory/scripts/selftest.sh
 
-Runs 110 automated tests in a temporary repo; your projects and memory are not touched. Passes on
+Runs the automated tests in a temporary repo; your projects and memory are not touched. Passes on
 bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
 jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
 intact (`.bak` backup).
@@ -297,8 +310,9 @@ Turn hooks off: `export PM_HOOKS=off`. Settings: `PM_RECALL_MAX` (5), `PM_MAX_NU
 
 ## 4. Update and uninstall
 
-    git -C ~/tools/project-memory pull
-    cd ~/code/my-project && bash ~/tools/project-memory/scripts/install.sh   # refreshes the skill copy
+    cd ~/code/my-project && npx team-memory@latest      # refreshes the skill copy; .memory/ is untouched
+
+From a clone: `git -C ~/tools/project-memory pull`, then run its `scripts/install.sh` in the project.
 
 From the registry: `omp skill update project-memory`.
 To uninstall: `install.sh --remove-hooks`, then delete `.agents/skills/project-memory`,
@@ -307,10 +321,19 @@ To uninstall: `install.sh --remove-hooks`, then delete `.agents/skills/project-m
 
 ## 5. Publishing (for maintainers)
 
+Every release: bump the version in `SKILL.md` (`metadata.version`), `package.json` and
+`CHANGELOG.md` together — the self-test fails when they differ.
+
 GitHub (`git@github.com:afdhaa/memory.git`):
 
     bash scripts/selftest.sh         # must report 0 failed
     git add -A && git commit -m "…" && git push
+
+npm (`team-memory`; needs an npm account with 2FA, `npm login` once):
+
+    npm pack --dry-run               # check the file list: only the skill, no test or scratch files
+    npm publish                      # asks for the 2FA code
+    git tag vX.Y.Z && git push origin vX.Y.Z
 
 skills.omp.sh (the version comes from `metadata.version` in SKILL.md):
 

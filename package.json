@@ -1,0 +1,42 @@
+{
+  "name": "team-memory",
+  "version": "3.14.0",
+  "description": "Shared project memory for your team and your coding agents: plain Markdown in your repo, no server. A skill for Claude Code, Codex, OpenCode, Antigravity and omp.",
+  "keywords": [
+    "ai-agents",
+    "agent-skills",
+    "claude-code",
+    "codex",
+    "coding-agent",
+    "memory",
+    "project-memory",
+    "markdown"
+  ],
+  "homepage": "https://github.com/afdhaa/memory#readme",
+  "bugs": {
+    "url": "https://github.com/afdhaa/memory/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/afdhaa/memory.git"
+  },
+  "license": "MIT",
+  "author": "Afdhalul Ihsan Rosyidi",
+  "bin": {
+    "team-memory": "scripts/cli.sh"
+  },
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "assets/",
+    "hooks/",
+    "references/",
+    "scripts/"
+  ],
+  "os": [
+    "darwin",
+    "linux"
+  ]
+}
