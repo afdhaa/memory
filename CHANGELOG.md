@@ -3,6 +3,10 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## Unreleased
+- README rewritten as the npm page: what it is and a quick start first, `npx team-memory` everywhere,
+  stale parts removed (omp registry placeholder, `.bak` backups, clone paths).
+
 ## 3.14.0
 - Published on npm as `team-memory`: `npx team-memory` installs into the current project
   (`--global`, `--no-hooks`, `--remove-hooks`, `selftest`, `--version`); README install section rewritten.

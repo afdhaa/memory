@@ -1,399 +1,232 @@
-# project-memory v3.14
+# team-memory
 
-Markdown memory for coding agents: one memory per project in `.memory/`, plus a personal memory
-shared across projects in `~/.agents/memory/user.md`. One skill for Claude Code, Codex, OpenCode,
-Antigravity and Pi/omp. No server, database or container; the hooks and helpers are plain bash + awk.
+[![npm](https://img.shields.io/npm/v/team-memory)](https://www.npmjs.com/package/team-memory)
+[![license](https://img.shields.io/npm/l/team-memory)](LICENSE)
 
-## 1. Install
+Long-term memory for coding agents, kept as plain Markdown in your repository. Your agent records
+the decisions, rules, corrections and pitfalls of a project in `.memory/`, reads them back before it
+works, and your team reviews them in pull requests like any other file.
 
-Requires `bash`, `awk` and `git`. Runs on macOS and Linux (Windows: inside WSL).
+- **Agents stop re-learning your project.** "We don't use axios here", "integration tests need the
+  database container", "don't touch the legacy auth module": said once, remembered by every session.
+- **One memory for every agent:** Claude Code, Codex, OpenCode, Antigravity and Pi/omp.
+- **No server, no database, no network.** The memory is Markdown, the helpers are bash and awk,
+  the history is git.
 
-### A. Per project with npm (recommended)
+## Quick start
 
-From the root of every project that should have memory:
+From the root of a project (macOS or Linux; Windows inside WSL; needs `bash`, `awk` and `git`):
 
-    cd ~/code/my-project
     npx team-memory
 
-`npx` downloads the [`team-memory`](https://www.npmjs.com/package/team-memory) package and runs its
-installer; nothing is installed globally and node is not needed afterwards. Options go after the
-name (`npx team-memory --no-hooks`); `npx team-memory --version` prints the version and
-`npx team-memory selftest` checks that it works on your machine.
+Then open your agent in that project and say:
 
-The only official sources are the npm package `team-memory` and github.com/afdhaa/memory. A
-package under another name that claims to be this skill is not from this project.
+> complete .memory/index.md from the scan
 
-Without npm, clone the repository once and run its installer instead:
+The agent writes a short summary of the project and how its code fits together. From then on it
+reads memory at the start of each task and records what is worth keeping. Commit `.memory/` so your
+team and their agents share it.
 
-    git clone https://github.com/afdhaa/memory.git ~/tools/project-memory
-    cd ~/code/my-project
-    bash ~/tools/project-memory/scripts/install.sh
-
-What it creates:
-
-| Location | Contents |
-|---|---|
-| `.agents/skills/project-memory/` | copy of the skill (read by Codex, OpenCode, Antigravity, omp) |
-| `.claude/skills/project-memory` | symlink to the copy above (Claude Code) |
-| `.memory/` | project memory from the templates, scanned right away (see §2); `.memory/README.md` explains each file to teammates |
-| `AGENTS.md`, `CLAUDE.md` | a short instruction block between `<!-- project-memory:start/end -->` in `AGENTS.md`; a new `CLAUDE.md` just imports it (`@AGENTS.md`), so Claude Code also sees your project's own AGENTS.md. An existing `CLAUDE.md` gets the block too; a symlink is left alone. |
-| `.claude/settings.json`, `.codex/hooks.json` | automatic hooks (see §3) |
-| `.gitignore`, `.gitattributes`, pre-commit | keeps personal files out of git, merges without conflicts, blocks leaked tokens |
-| `~/.agents/memory/user.md` | personal memory for all projects (created if missing) |
-
-| Option | Effect |
-|---|---|
-| *(none)* | everything in the table above |
-| `--no-hooks` | the same, without agent hooks |
-| `--remove-hooks` | removes the agent hooks and the project-memory pre-commit block (nothing else is touched) |
-| `--global` | skill for all projects + user memory (no `.memory/`, no hooks) |
-
-Safe to re-run. `.memory/` and `user.md` are never overwritten; other hooks and an existing
-pre-commit hook are kept (the previous `settings.json`/`hooks.json` is backed up in `.git/project-memory-backup/`).
-
-### B. Global (all projects, no hooks)
-
-    npx team-memory --global          # or: bash ~/tools/project-memory/scripts/install.sh --global
-
-Copies the skill to `~/.agents/skills`, `~/.claude/skills`, `~/.config/opencode/skills` and
-`~/.gemini/antigravity/skills`. In a project without `.memory/`, the agent creates it from the
-templates.
-
-### C. From the omp registry (skills.omp.sh)
-
-Once published (see §5):
-
-    omp skill install -g @<scope>/project-memory     # all projects
-    omp skill install @<scope>/project-memory        # this project only
-
-omp asks for confirmation because the skill ships scripts.
-
-### Check the installation
-
-    bash .agents/skills/project-memory/scripts/selftest.sh
-
-Runs the automated tests in a temporary repo; your projects and memory are not touched. Passes on
-bash 5 with mawk/gawk and on bash 3.2 with BWK awk (macOS). The installer needs no python, node or
-jq: hooks are merged into existing `settings.json`/`hooks.json` with awk, and other hooks stay
-intact (`.bak` backup).
-
-## 2. Getting started
-
-### Memory structure
-
-The installer (or the first `mem.sh scan`) adds this to your project. Everything in `.memory/` is
-plain Markdown that you can read, edit and review in pull requests.
+## What it installs
 
 ```
 your-project/
-├── .memory/                    # project memory — committed, shared by the team and every agent
-│   ├── README.md               # explains these files to teammates (documentation, not memory)
-│   ├── index.md                # read at the start of every task: summary, rules, key facts, map
-│   ├── progress.md             # your own work state: in progress, next, blocked — gitignored
-│   ├── decisions.md            # why things are the way they are, with rejected alternatives
-│   ├── gotchas.md              # surprises and corrections, each with "Do instead"
-│   ├── topics/
-│   │   ├── codebase.md         # how the code fits together, project layout, generated scan facts
-│   │   └── <area>.md           # deeper notes per area (auth, billing, deploy…), added over time
-│   ├── procedures/
-│   │   └── <name>.md           # step-by-step workflows that repeat (release, migration…)
-│   ├── local.md                # personal notes for this project      — gitignored
-│   ├── inbox.md                # remarks captured from chat, unanswered proposals — gitignored
-│   └── .stats.tsv              # which entries the hooks surfaced      — gitignored
-├── .agents/skills/project-memory/   # the skill itself (SKILL.md, references/, scripts/, hooks/)
-├── .claude/skills/project-memory    # symlink to the skill, for Claude Code
-├── .claude/settings.json       # Claude Code hooks
-├── .codex/hooks.json           # Codex hooks
-├── AGENTS.md, CLAUDE.md        # instruction block for agents (CLAUDE.md imports AGENTS.md)
-└── .gitattributes, .gitignore  # merge=union for decisions/gotchas, personal files kept out of git
+├── .memory/                      # the memory — committed, shared by the team and every agent
+│   ├── index.md                  # read at every task: summary, rules, key facts, map of the files
+│   ├── decisions.md              # why things are the way they are, newest first
+│   ├── gotchas.md                # surprises and corrections, each with what to do instead
+│   ├── topics/codebase.md        # how the code fits together + facts generated by the scan
+│   ├── topics/<area>.md          # deeper notes per area (auth, billing, deploy…)
+│   ├── procedures/<name>.md      # step-by-step workflows that repeat
+│   ├── README.md                 # explains these files to teammates
+│   └── progress.md, local.md, inbox.md     # personal, not committed
+├── .agents/skills/project-memory/    # the skill (Claude Code gets a link in .claude/skills/)
+├── AGENTS.md, CLAUDE.md          # a short instruction block; a new CLAUDE.md imports AGENTS.md
+├── .claude/settings.json, .codex/hooks.json   # hooks for Claude Code and Codex
+└── .gitignore, .gitattributes, pre-commit     # personal files out of git, merge-friendly, secret check
 
-~/.agents/memory/user.md        # your personal preferences for every project (not in the repo)
+~/.agents/memory/user.md          # your own preferences, for every project
 ```
 
-What an entry looks like:
+| Command | Effect |
+|---|---|
+| `npx team-memory` | everything above, then a scan of the repository |
+| `npx team-memory --no-hooks` | the same, without agent hooks |
+| `npx team-memory --global` | the skill for every project, plus `user.md` (no `.memory/`, no hooks) |
+| `npx team-memory --remove-hooks` | removes the hooks and the pre-commit block; nothing else |
+| `npx team-memory selftest` | runs the test suite in a temporary repository |
+| `npx team-memory --version` | prints the version |
+
+Safe to re-run: `.memory/` and `user.md` are never overwritten, your own hooks and pre-commit hook are
+kept, and the previous `settings.json`/`hooks.json` is backed up in `.git/project-memory-backup/`.
+
+## How it works
+
+**During a session** (Claude Code and Codex run this through hooks; other agents follow the
+instructions in AGENTS.md and the skill):
+
+| When | What happens |
+|---|---|
+| Session start | the agent gets `index.md`, its own `progress.md` and your `user.md` |
+| Each message you send | the memory entries that match it are added; a correction ("don't…", "jangan…", "always…") is captured so the agent records it |
+| Before a file edit | entries tagged for that file are shown; an area you froze needs your approval first |
+| Before it stops | if code changed but nothing was recorded, the agent is reminded once |
+
+**What goes where:**
+
+| You or the agent… | Recorded in |
+|---|---|
+| set a rule for the whole project ("always use uv here") | `index.md` Rules |
+| correct the agent about one area | `gotchas.md`, tagged with that path |
+| state a preference for all your projects | `~/.agents/memory/user.md` |
+| decide something (a library, a design, "don't touch X") | `decisions.md`, with the reason |
+| hit something non-obvious (a setup step, a misleading name) | `gotchas.md` |
+| finish work users will notice | the project's changelog (see [Teams](#teams)) |
+
+An entry is written for a teammate who was not there:
 
 ```
-1. **[2026-10-21] The supplier API answers bulk product uploads with "429 Too Many Requests"** #supplier #produk @src/services/supplier.js (agent, seen: 1, unconfirmed)
-   Why: publishAll() sent one POST right after another; the supplier's exact rate limit is not documented.
+1. **[2026-10-21] The supplier API rejects bursts of product uploads with HTTP 429** #supplier #produk @src/services/supplier.js (agent, seen: 1, unconfirmed)
+   Why: publishAll() sent one POST right after another; the supplier's rate limit is not documented.
    Do instead: keep the pause between requests in publishAll() and retry a 429 after its Retry-After delay.
 ```
 
-- **Title**: the point in one sentence, dated.
-- **`#tags`**: help search; **`@path`**: shows the entry before an agent edits that code
-  (patterns work too: `@app/*/migrations/` for one folder level, `@**/schema.graphql` for any depth).
-- **`(user|agent, seen: N)`**: who it came from and how often it came up; `unconfirmed` marks an
-  agent's conclusion that nobody has checked yet.
-- **`Why:` / `Do instead:`**: the cause and the concrete fix.
+- `#tags` help search; `@path` shows the entry before an agent edits that code (`*` and `**` patterns work).
+- `(user, …)` is what you said, trusted as is. `(agent, …, unconfirmed)` is the agent's own
+  conclusion: other agents check it against the code before relying on it. It is confirmed when you
+  approve it (in chat, or by deleting `, unconfirmed` in a PR review), when it comes up again in a
+  later session, or when the agent proves it with a test or command. `mem.sh review` lists them.
+- **English by default**, whatever language you chat in, so every teammate can read it; your own
+  words are added as tags (`#produk`) so recall still finds the entry. Another language: add
+  `- Memory language: Indonesian` to the Rules in `index.md`.
+- **Plain and specific.** The skill bans filler and marketing words ("robust", "seamless",
+  "various"), and `mem.sh lint` flags them.
 
-### Scan a new project
+## Talking to the agent
 
-When `.memory/` is created, the installer scans the repo. Without the installer (for example with
-the global skill in omp), run the scan from the project root; it creates `.memory/` if needed:
-
-    bash ~/tools/project-memory/scripts/mem.sh scan            # or .agents/skills/project-memory/scripts/mem.sh
-    bash ~/tools/project-memory/scripts/mem.sh scan --print    # print the result only, write nothing
-
-`.memory/topics/codebase.md` has three parts:
-
-1. **How it fits together**: an overview the agent writes after the scan. It covers the main
-   parts of the code, how a request or job flows from the entry point to storage, which files to
-   read first, and conventions that the file names do not reveal. The scan never changes it.
-2. **Project layout**: one line per folder, written by the agent: what lives there and where new
-   code of that kind goes. The scan never changes it.
-3. **Repository facts (generated)**: the scan output. Each section opens with one sentence that
-   says what its list contains:
-
-| Section | Contents |
-|---|---|
-| Overview | name, README summary, file count per language, branch/commits/remote, docs |
-| Stack | Node (npm/pnpm/yarn/bun + frameworks and versions), Python, Go, Rust, PHP, Ruby, Java/Kotlin, .NET, Dart, Elixir, Deno, runtime versions |
-| Commands | `package.json`/`composer.json` scripts, `Makefile`/`justfile` targets, standard commands (`go test ./...`, `cargo test`, `pytest`) |
-| Layout | main folders with their largest subfolders and file counts, files at the root |
-| Infrastructure & CI | Docker, docker-compose services, GitHub Actions/GitLab CI/…, Vercel/Netlify/Fly/…, Terraform |
-| Config & environment | variable **names** from `.env.example`; `.env` contents are never read |
-| Tests | number of test files and where they are |
-| Recently active areas | folders changed most often in the last 300 commits |
-
-The scan also adds `topics/codebase.md` to the Map in `index.md` and fills **Key facts** while
-that section is empty. A re-scan replaces only the block between `scan:start`/`scan:end`; text
-outside the block and Key facts you have edited stay as they are. An older `codebase.md` without
-"How it fits together" or "Project layout" gets those sections, empty, for the agent to write. `mem.sh lint` warns when
-the scan is more than 150 commits old (`PM_SCAN_STALE`).
-
-### After the scan
-
-1. Open your agent at the project root and ask it to **"complete .memory/index.md from the scan"**.
-   The agent writes the Project summary and the "How it fits together" and "Project layout"
-   sections of `codebase.md`. In Claude Code and Codex, a hook reminds it while any is still empty.
-2. Work as usual. The agent reads memory at the start of a task and, before finishing, records
-   decisions, your corrections, gotchas and progress. Whenever it writes to memory, it ends its
-   reply with one line such as `📝 memory: +1 gotcha (#test), progress`.
-3. Commit `.memory/` so teammates and other agents share the same memory.
-
-### How memory is written
-
-`.memory/` is written for people (teammates, PR reviewers, you) as much as for agents.
-
-**Language: English by default**, whatever language the conversation is in, so every person and
-every agent can read it. UI text, error messages and business terms are kept verbatim, quoted and
-then explained. So that automatic recall still finds an entry when you ask in another language,
-the agent adds your terms as tags (for example `#harga` next to `#pricing`). To use another
-language, add this line to the Rules in `index.md` (or to `user.md` for all projects):
-
-    - Memory language: Indonesian
-
-**Writing rules** (short version in SKILL.md, full guide with examples in `references/writing.md`):
-
-- The title is a complete sentence that states the point, not an abbreviation or a fragment.
-- Every entry says **what** happens, **why** (`Why:`) and **what to do** (`Do instead:`).
-- Concrete: name the command, file, number or error message.
-- **Anti-slop:** no filler ("It is important to note…", "In order to"), no marketing words
-  (robust, seamless, comprehensive, leverage…), no vague quantities ("various", "several"), no
-  assistant voice ("I", "Great news", "Let me know"), no emoji, and no guesses recorded as facts.
-- `mem.sh lint` flags those filler words (text inside `code` is ignored).
-
-Examples:
-
-    ✗ 1. **[2026-10-14] API 429** #api (agent, seen: 1)
-         Do instead: sleep.
-    ✗ 1. **[2026-10-14] Implemented a robust, seamless retry strategy for the API** #api
-         Why: it is important to note that various errors can occur.
-
-    ✓ 1. **[2026-10-14] The supplier API rejects bursts of requests with HTTP 429** #api @src/sync/ (agent, seen: 1)
-         Why: it allows about 60 requests per minute per key; bulk product uploads exceeded that.
-         Do instead: wait 1 second between requests in every create/publish loop (see syncProducts()).
-
-**Unconfirmed entries.** What you tell the agent is recorded as `(user, …)` and trusted. What the
-agent concludes on its own is recorded as `(agent, seen: 1, unconfirmed)`: agents still see it, but
-must check it against the code before relying on it. It becomes confirmed when you approve it (in
-chat or by deleting `, unconfirmed` in a PR review), when it comes up again in a later session, or
-when the agent verifies it with a test or command. Unconfirmed entries never become project Rules.
-Ask **"review memory"** (or "cek memori") to go through them; `mem.sh lint` flags those older than
-30 days.
-
-    1. **[2026-10-21] The supplier API rejects bursts of product uploads with HTTP 429** #supplier #produk @src/services/supplier.js (agent, seen: 1, unconfirmed)
-
-The labels `Why:` / `Do instead:` / `Rejected:` / `Revisit if:` are always in English because the
-hooks recognise them. Ask the agent to **"clean up memory"** to rewrite (and translate) older entries.
-
-### Auto or confirm mode
-
-| Mode | What the agent does |
-|---|---|
-| `auto` (default) | Writes memory as it works and reports each write in one line (`📝 memory: +1 gotcha …`) so you can veto it. |
-| `confirm` | Writes what **you** tell it (instructions, corrections, "remember…") right away. What it **concludes itself** (gotchas, decisions, codebase notes) it only proposes: at the end of the task it lists the exact entries, numbered, and writes only what you approve. |
-
-**Switch modes** in one of three ways:
-
-1. **Ask the agent:** "ask before saving memory" / "mode konfirmasi" switches to confirm; "save memory
-   automatically" / "mode otomatis" switches back. Add "for all projects" / "untuk semua project" to
-   make it global.
-2. **Run the helper:**
-
-       bash .agents/skills/project-memory/scripts/mem.sh mode                    # show the current mode
-       bash .agents/skills/project-memory/scripts/mem.sh mode confirm            # this project
-       bash .agents/skills/project-memory/scripts/mem.sh mode auto               # back to automatic
-       bash .agents/skills/project-memory/scripts/mem.sh mode confirm --global   # all your projects
-
-3. **Edit the line yourself:** `- Memory writes: confirm` (or `auto`) under Rules in
-   `.memory/index.md` for this project, or under Workflow in `~/.agents/memory/user.md` for all
-   projects. If both exist, the project setting wins. No line means `auto`.
-
-The new mode applies from the next message; hooks pick it up at once.
-
-**Answering a proposal** in confirm mode: reply `all`, `1,3`, `2: <change>` or `none`. Your own
-instructions ("don't use axios", "always…", "remember…", "catat…") are written right away, since
-they come from you. Proposals you leave unanswered wait in `.memory/inbox.md` (not committed) and come back at
-the next session; nothing is written without your yes.
-
-### Talking to the agent
-
-The skill understands both English and Indonesian phrasing.
+English and Indonesian both work.
 
 | You say | Result |
 |---|---|
 | "remember …" / "ingat ini …" / "catat …" | recorded for this project |
-| "remember for all projects …" / "untuk semua project …" | recorded in `~/.agents/memory/user.md` |
-| "forget …" / "lupakan …" | removed (decisions are struck through, not deleted) |
-| "what do you know about X" | summary from memory with file references |
-| "freeze / don't touch folder X" / "jangan sentuh …" | area frozen (`#hold`); the agent must ask before editing it |
+| "… for all my projects" / "untuk semua project …" | recorded in `user.md` |
+| "forget …" / "lupakan …" | removed (a decision is struck through, not deleted) |
+| "what do you know about X?" | a summary from memory, with file references |
+| "don't touch folder X" / "jangan sentuh …" | the area is frozen: the agent asks before editing it |
 | "update memory" | records everything worth keeping from this session |
-| "ask before saving memory" / "mode konfirmasi" | confirm mode: the agent proposes entries and writes only what you approve ("mode otomatis" switches back) |
-| "review memory" / "cek memori" | walks you through unconfirmed agent entries: keep, fix or drop |
-| "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites cryptic or padded entries, re-checks with lint |
-| "rescan the project" / "scan ulang" | `mem.sh scan`, then updates Project summary, Key facts and "How it fits together" if needed |
+| "review memory" / "cek memori" | goes through the agent's unconfirmed entries with you |
+| "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites unclear ones |
+| "rescan the project" / "scan ulang" | refreshes the generated facts and the overview |
 | "don't save this" / "jangan dicatat" | nothing is stored |
 
-### Helpers (can be run by hand)
+### Auto or confirm mode
 
-    bash .agents/skills/project-memory/scripts/mem.sh search pricing product
-    bash .agents/skills/project-memory/scripts/mem.sh path src/api/
-    bash .agents/skills/project-memory/scripts/mem.sh lint      # also: missing @paths, stale entries, duplicates, filler words
-    bash .agents/skills/project-memory/scripts/mem.sh review    # unconfirmed agent entries, oldest first
-    bash .agents/skills/project-memory/scripts/mem.sh mode confirm   # ask before writing memory (auto = default)
-    bash .agents/skills/project-memory/scripts/mem.sh changelog      # where finished work is recorded in this project
-    bash .agents/skills/project-memory/scripts/mem.sh stats
-    bash .agents/skills/project-memory/scripts/mem.sh scan      # re-index the repo
-    bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 30   # lift #hold for 30 minutes
+By default the agent writes memory as it works and ends its reply with one line you can veto:
+`📝 memory: +1 gotcha (#test), progress`. In **confirm mode** it writes your own instructions right
+away but only *proposes* its own conclusions: at the end of a task it lists the exact entries,
+numbered, and writes what you approve (`all`, `1,3`, `2: <change>` or `none`).
 
-## 3. Agent support
+Switch by telling the agent ("ask before saving memory" / "mode konfirmasi"; back with "mode
+otomatis"), or with the helper:
 
-| Agent | Skill | Automatic hooks |
+    bash .agents/skills/project-memory/scripts/mem.sh mode confirm            # this project
+    bash .agents/skills/project-memory/scripts/mem.sh mode confirm --global   # all your projects
+    bash .agents/skills/project-memory/scripts/mem.sh mode auto
+
+It is the line `- Memory writes: confirm` in `.memory/index.md` (or in `user.md`); the project wins.
+
+## Helpers
+
+From the project root:
+
+    M=.agents/skills/project-memory/scripts/mem.sh
+    bash $M search pricing product   # ranked search through project and user memory
+    bash $M path src/api/            # entries that apply to a file or folder
+    bash $M lint                     # size, secrets, stale or duplicate entries, missing paths, filler words
+    bash $M review                   # the agent's unconfirmed entries, oldest first
+    bash $M scan                     # re-index the repository into topics/codebase.md
+    bash $M changelog                # how this project records changes for its users
+    bash $M approve src/api/ 30      # allow edits in a frozen area for 30 minutes
+    bash $M stats                    # entries per file and how often hooks used them
+
+**The scan** reads file names, manifests and git history — never the values in `.env` files — and
+writes the generated part of `topics/codebase.md`: languages, frameworks and versions, commands,
+folders, CI and containers, environment variable names, tests, and the folders that changed most
+recently (bot commits left out). It also fills Key facts in `index.md`. The agent writes the
+explanation above it ("How it fits together" and "Project layout"); a re-scan never touches that.
+
+## Agent support
+
+| Agent | Reads the skill from | Hooks |
 |---|---|---|
-| Claude Code | `.claude/skills/` | yes (`.claude/settings.json`) |
-| Codex | `.agents/skills/` | yes (`.codex/hooks.json`) |
-| omp / Pi | `.agents/skills/`, `~/.agents/skills/` | no — the agent follows SKILL.md by itself |
-| OpenCode, Antigravity | `.agents/skills/` | no — through the instructions in AGENTS.md |
+| Claude Code | `.claude/skills/` | yes, in `.claude/settings.json` |
+| Codex | `.agents/skills/` | yes, in `.codex/hooks.json` |
+| Pi / omp | `.agents/skills/`, `~/.agents/skills/` | no: the agent follows the skill itself (type `/skill:project-memory` to load it) |
+| OpenCode, Antigravity | `.agents/skills/` | no: through the block in AGENTS.md |
 
-What the hooks do in Claude Code and Codex:
-
-| When | What |
-|---|---|
-| Session start / after compaction | injects `index.md`, `progress.md`, `user.md`; reminds the agent to triage the inbox |
-| Every prompt | injects up to 5 of the most relevant entries (keyword ranking, no repeats within a session); corrections ("don't…", "wrong…", "jangan…", "always…") are captured in `inbox.md` with tokens redacted |
-| Before a file edit | shows the `@path` entries for that file; `#hold` areas always need approval (Claude Code: permission prompt; Codex: the edit is blocked, the agent asks you and runs `mem.sh approve` once you agree) |
-| Before stopping | reminds the agent to record memory if code changed but memory did not (at most 3 times per session) |
-
-Turn hooks off: `export PM_HOOKS=off`. Settings: `PM_RECALL_MAX` (5), `PM_MAX_NUDGES` (3),
-`PM_STALE_DAYS` (120), `PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY`.
-
-### Notes for omp
-
-- Install with method A, B or C. omp reads `.agents/skills/` (project) and `~/.agents/skills/`
-  (global) without extra configuration, and also the instruction block in `AGENTS.md`.
-- omp does not run Claude Code hooks (omp hooks are TS/JS modules), so the agent does recall and
-  recording itself by following SKILL.md. To make sure the skill is used, type
-  `/skill:project-memory` at the start of a session.
-- Check: ask omp "which skills are related to memory?" — `project-memory` should be listed.
-- New project with the global skill: type `/skill:project-memory scan this project`; the agent runs
-  `mem.sh scan` from the skill folder and then writes the Project summary.
-
-## 4. Update and uninstall
-
-    cd ~/code/my-project && npx team-memory@latest      # refreshes the skill copy; .memory/ is untouched
-
-From a clone: `git -C ~/tools/project-memory pull`, then run its `scripts/install.sh` in the project.
-
-From the registry: `omp skill update project-memory`.
-To uninstall: `install.sh --remove-hooks`, then delete `.agents/skills/project-memory`,
-`.claude/skills/project-memory` and the `project-memory` block in `AGENTS.md`/`CLAUDE.md`.
-`.memory/` stays yours.
-
-## 5. Publishing (for maintainers)
-
-Every release: bump the version in `SKILL.md` (`metadata.version`), `package.json` and
-`CHANGELOG.md` together — the self-test fails when they differ.
-
-GitHub (`git@github.com:afdhaa/memory.git`):
-
-    bash scripts/selftest.sh         # must report 0 failed
-    git add -A && git commit -m "…" && git push
-
-npm (`team-memory`; needs an npm account with 2FA, `npm login` once):
-
-    npm pack --dry-run               # check the file list: only the skill, no test or scratch files
-    npm publish                      # asks for the 2FA code
-    git tag vX.Y.Z && git push origin vX.Y.Z
-
-skills.omp.sh (the version comes from `metadata.version` in SKILL.md):
-
-    omp skill publish . --dry-run    # check package contents and the secret scan
-    omp skill version patch          # bump the version for the next release
-    omp skill publish .
+Turn the hooks off for a session with `export PM_HOOKS=off`. Tuning: `PM_RECALL_MAX` (entries per
+message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
+`PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY` (path of `user.md`).
 
 ## Teams
 
-- `.gitattributes` sets `merge=union` for `decisions.md` and `gotchas.md`: additions from two branches merge without conflicts (run `mem.sh lint` after a merge: it flags duplicates and sections over the cap).
-- The pre-commit hook rejects commits that put tokens or passwords into `.memory/`.
-- `progress.md`, `inbox.md`, `local.md` and `.stats.tsv` are personal and not committed. What the team needs to know about finished work goes to the project's changelog (below).
-- `mem.sh lint` exits with 1 when it finds an issue, so it can run in CI on pull requests that touch `.memory/`.
-
-**Progress and the changelog.** `progress.md` is each person's own work state (what their agent is
-doing, what comes next) and is never committed, so parallel branches never conflict on it. Finished
-work that users of the project would notice (a feature, a fix, a breaking change) goes to the
-project's changelog, the way the project already keeps it — `mem.sh changelog` shows which:
+- **Commit `.memory/` and review it in pull requests.** `mem.sh lint` exits with 1 on problems, so it
+  can run in CI.
+- **No merge conflicts on memory.** `decisions.md` and `gotchas.md` merge with `merge=union`; run
+  `mem.sh lint` after a merge to catch duplicates. `progress.md` is personal and never committed.
+- **Finished work goes to the project's changelog, the way the project keeps it:**
 
 | The project has | The agent |
 |---|---|
-| `CHANGELOG.md` (or CHANGES, HISTORY, NEWS) | adds one line under `## Unreleased` in the file's style |
-| changesets, towncrier, `changelog.d/`, a release-notes folder (`docs/releases/`) | adds a fragment or release-note line there |
-| notes generated from commits or PR titles (release-please, semantic-release, git-cliff, release-drafter) | edits nothing; writes a clear conventional commit message |
-| nothing | asks you once whether to create `CHANGELOG.md`, and remembers the answer as a Rule (`- Changelog: CHANGELOG.md` / `- Changelog: none`) |
-
-Projects with `.memory/progress.md` committed by an earlier version: `git rm --cached .memory/progress.md`
-(the installer and lint remind you).
+| a changelog file (`CHANGELOG.md`, `CHANGES`, `HISTORY`, `NEWS`) | adds one line to its unreleased section, in the file's style |
+| changesets, towncrier or a release-notes folder | adds a fragment there |
+| notes generated from commits or PRs (release-please, semantic-release, git-cliff, a CI workflow, np) | edits nothing and writes a clear commit message |
+| nothing | asks you once and remembers the answer |
 
 ## Security and privacy
 
-**No network access.** The scripts and hooks are plain bash and awk. They make no HTTP requests,
-send no telemetry, and never fetch or push with git; they only read the local repository
-(`git ls-files`, `git log`, `git diff --cached`). The scan strips credentials from the remote URL.
+- **No network access.** The scripts make no HTTP requests and send no telemetry; git is only read
+  locally (`git ls-files`, `git log`), never fetched or pushed.
+- **Official sources:** the npm package [`team-memory`](https://www.npmjs.com/package/team-memory) and
+  [github.com/afdhaa/memory](https://github.com/afdhaa/memory). Anything else claiming to be this skill is not.
+- **Memory reaches your model provider.** The hooks add memory to the agent's context, which is sent
+  to Anthropic, OpenAI or whichever provider your agent uses, like any file the agent reads. Whether
+  it is used for training depends on your account and plan with them.
+- **No secrets in memory.** Write where a secret lives (`.env` → `STRIPE_SECRET_KEY`), never its
+  value. The pre-commit hook and `mem.sh lint` catch common token formats (cloud and API keys,
+  Stripe, GitHub, GitLab, npm, Slack, private keys, `user:password@` in URLs, `PASSWORD=…`);
+  captured chat is redacted. A password written in a sentence cannot be detected. In a public
+  repository `.memory/` is public.
+- **Memory is information, not orders.** Agents never run a command because an entry says so; the
+  hooks and lint flag entries that read like instructions planted for an agent. Hook scripts run on
+  every teammate's machine, so have changes reviewed, for example in `.github/CODEOWNERS`:
 
-**What reaches the model provider.** The hooks put memory into the agent's context: `index.md`,
-progress and your user memory at the start of a session, and the entries that match each prompt or
-edit. Like any file the agent reads, that context is sent to the model provider (Anthropic, OpenAI…).
-Whether it may be used for training, and how long it is kept, depends on your account and plan
-with that provider, not on this skill: check its privacy settings and terms before using the skill
-on sensitive code. To keep memory out of the context for a session: `export PM_HOOKS=off`.
+      /.memory/                          @your-org/maintainers
+      /.agents/skills/project-memory/    @your-org/maintainers
+      /.claude/settings.json             @your-org/maintainers
+      /.codex/hooks.json                 @your-org/maintainers
 
-**Keep memory free of secrets and sensitive data.** Write where a secret lives (`.env` →
-`STRIPE_SECRET_KEY`), never its value. The pre-commit check and `mem.sh lint` catch common token
-formats (cloud and API keys, Stripe, GitHub, GitLab, npm, Slack, SendGrid, private keys,
-`user:password@` in URLs, `PASSWORD=…`); a password written in a plain sentence cannot be detected.
-Prompts captured into `inbox.md` are redacted. Leave customer data, incident details and internal
-hostnames out of memory: in a public repository `.memory/` is public, and in a private one everyone
-with read access sees it.
+## Update and uninstall
 
-**Memory and hooks come in through git.** Agents treat memory as information, not as orders, and
-the hooks and `mem.sh lint` flag entries that read like instructions planted for an agent ("ignore
-previous instructions", "don't tell the user"). The hook scripts in `.agents/skills/project-memory/`
-run on every teammate's machine, like any project hook. Have the changes reviewed: for example, in
-`.github/CODEOWNERS`:
+    npx team-memory@latest            # in the project: refreshes the skill; .memory/ is untouched
 
-    /.memory/                          @your-org/maintainers
-    /.agents/skills/project-memory/    @your-org/maintainers
-    /.claude/settings.json             @your-org/maintainers
-    /.codex/hooks.json                 @your-org/maintainers
+To uninstall, run `npx team-memory --remove-hooks`, then delete `.agents/skills/project-memory`,
+`.claude/skills/project-memory` and the `project-memory` block in `AGENTS.md`/`CLAUDE.md`.
+`.memory/` stays yours.
+
+**Without npm:** clone this repository once and use `bash <clone>/scripts/install.sh` with the same
+options as above.
+
+## Development
+
+    bash scripts/selftest.sh          # must report 0 failed (bash 3.2 to 5, mawk, gawk and BWK awk)
+
+Release: bump the version in `SKILL.md` (`metadata.version`), `package.json` and `CHANGELOG.md`
+together (the self-test fails when they differ), commit, then:
+
+    npm publish --dry-run             # the package holds only the skill files
+    npm publish                       # asks for the 2FA code
+    git tag vX.Y.Z && git push origin vX.Y.Z
 
 ## License
 
