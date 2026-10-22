@@ -61,10 +61,10 @@ if has package.json; then
   FW="$(printf '%s\n' "$PKG" | awk -F'\t' -v self="$SELF" '
     BEGIN { n = split("next:Next.js nuxt:Nuxt react:React react-native:React_Native expo:Expo vue:Vue svelte:Svelte @sveltejs/kit:SvelteKit @angular/core:Angular solid-js:Solid astro:Astro @remix-run/react:Remix electron:Electron express:Express fastify:Fastify @nestjs/core:NestJS hono:Hono koa:Koa @trpc/server:tRPC graphql:GraphQL socket.io:Socket.IO prisma:Prisma @prisma/client:Prisma drizzle-orm:Drizzle mongoose:Mongoose sequelize:Sequelize typeorm:TypeORM @supabase/supabase-js:Supabase firebase:Firebase tailwindcss:Tailwind @reduxjs/toolkit:Redux zustand:Zustand @tanstack/react-query:TanStack_Query zod:Zod vite:Vite webpack:webpack typescript:TypeScript turbo:Turborepo nx:Nx jest:Jest vitest:Vitest mocha:Mocha @playwright/test:Playwright cypress:Cypress storybook:Storybook eslint:ESLint @biomejs/biome:Biome prettier:Prettier", P, " ")
             for (i = 1; i <= n; i++) { split(P[i], kv, ":"); ORD[i] = kv[1]; NAME[kv[1]] = kv[2] } }
-    $1 != "devDependencies" && ($2 in NAME) { RT[$2] = 1 }
+    $1 != "devDependencies" && ($2 in NAME) { RUNTIME[$2] = 1 }
     $1 ~ /ependencies$/ && ($2 in NAME) && !($2 in V) && $2 != self { v = $3; gsub(/^[\^~>=< ]+/, "", v); sub(/[[:space:]|].*/, "", v); V[$2] = v }
     END { for (i = 1; i <= n; i++) if (ORD[i] in V) { nm = NAME[ORD[i]]; gsub(/_/, " ", nm); if (seen[nm]++) continue
-            v = V[ORD[i]]; dev = (!(ORD[i] in RT) && ORD[i] ~ /^(next|nuxt|react|react-native|expo|vue|svelte|@sveltejs\/kit|@angular\/core|solid-js|astro|@remix-run\/react|electron|express|fastify|@nestjs\/core|hono|koa)$/) ? " (dev only)" : ""
+            v = V[ORD[i]]; dev = (!(ORD[i] in RUNTIME) && ORD[i] ~ /^(next|nuxt|react|react-native|expo|vue|svelte|@sveltejs\/kit|@angular\/core|solid-js|astro|@remix-run\/react|electron|express|fastify|@nestjs\/core|hono|koa)$/) ? " (dev only)" : ""
             print nm ((v ~ /^[0-9]/) ? " " v : "") dev } }' | join ', ')"
   STACK="${STACK}- Node.js ($PM)${FW:+ — $FW}"$'\n'
   node_ver="$(printf '%s\n' "$PKG" | awk -F'\t' '$1 == "engines" && $2 == "node" { print $3 }')"
@@ -235,7 +235,7 @@ TEST_DIRS="$(printf '%s\n' "$TESTS" | awk -F/ 'NF { k = (NF > 1) ? $1 "/" : "(ro
   sort -t"$TAB" -k1,1nr -k2,2 | head -n 5 | awk -F'\t' '{ print "`" $2 "` " $1 }' | join ', ')"
 DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|mdx|rst))$' | grep -viE '^(license|licence|code_of_conduct|changelog|release-notes|history|cla|dco|security|support|governance|maintainers)[._-]' |
   while IFS= read -r f; do
-    case "$f" in AGENTS.md|CLAUDE.md|GEMINI.md) [ -L "$f" ] && continue ;; esac   # CLAUDE.md -> AGENTS.md: listed once   # skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
+    case "$f" in (AGENTS.md|CLAUDE.md|GEMINI.md) [ -L "$f" ] && continue ;; esac   # CLAUDE.md -> AGENTS.md: listed once; also skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
     awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ && !/^[[:space:]]*@\.?\/?AGENTS\.md[[:space:]]*$/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
   done | awk '{ l = tolower($0); k = (l ~ /^readme(\.[a-z]+)?$/) ? 0 : (l ~ /^readme[-_.]/ ? 2 : 1); print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 |
   awk -F'\t' '$1 == 2 { tr[++t] = $2; next } { print "`" $2 "`" }   # README-de.md, README.zh-CN.md…: one entry
@@ -316,9 +316,9 @@ BODY="$(
   [ -n "$DOCS" ] && printf 'Documentation to read first: %s.\n' "$DOCS"
   if [ -f "$HERE/changelog.sh" ]; then . "$HERE/changelog.sh"
     case "$(changelog_info "$ROOT" | cut -f1,2)" in
-      fragments*) printf 'Changes for users are recorded as fragments or release notes in %s, not in a single changelog file.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
-      generated*) printf 'The changelog is generated from commit messages (%s); it is not edited by hand.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
-      file*) printf 'Changes for users are recorded in %s.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
+      (fragments*) printf 'Changes for users are recorded as fragments or release notes in %s, not in a single changelog file.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
+      (generated*) printf 'The changelog is generated from commit messages (%s); it is not edited by hand.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
+      (file*) printf 'Changes for users are recorded in %s.\n' "$BT$(changelog_info "$ROOT" | cut -f2)$BT" ;;
     esac
   fi
   sec "Stack" "Languages, frameworks and tools detected from the manifest files (versions are the declared ranges):" "$STACK"

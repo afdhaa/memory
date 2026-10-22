@@ -223,7 +223,7 @@ prompt)
   fi
   # index.md lines the session start already showed are not repeated
   [ -f "$STATE/index.snap" ] && hits="$(printf '%s\n' "$hits" | while IFS= read -r h; do
-      case "$h" in .memory/index.md:*) t="${h#*: }"; t="${t%…}"; grep -qF -- "$t" "$STATE/index.snap" && continue ;; esac
+      case "$h" in (.memory/index.md:*) t="${h#*: }"; t="${t%…}"; grep -qF -- "$t" "$STATE/index.snap" && continue ;; esac
       printf '%s\n' "$h"; done)"
   new="$(printf '%s\n' "$hits" | inject_new)"
   # unconfirmed agent entries are leads, not facts
@@ -258,8 +258,12 @@ pre-edit)
   all_hits="$(
     find "$MEM" -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | while IFS= read -r f; do
       PATHS="$paths" LC_ALL=C awk -v rel="${f#"$ROOT"/}" '
-        function pm_hit(p, t,  re) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
-      re = t; gsub(/[][.+?^${}()|\\]/, "\\\\&", re); gsub(/\*\*/, "\001", re); gsub(/\*/, "[^/]*", re); gsub(/\001/, ".*", re)
+        function pm_hit(p, t,  re, i, c) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
+      # build the regex one character at a time: bracket tricks such as /[][…]/ are read differently by gawk, mawk and BWK awk
+      re = ""; for (i = 1; i <= length(t); i++) { c = substr(t, i, 1)
+        if (c == "*") { if (substr(t, i + 1, 1) == "*") { re = re ".*"; i++ } else re = re "[^/]*" }
+        else if (c == "^") re = re "\\^"; else if (c == "\\") re = re "\\\\"
+        else if (index(".+?$(){}|[]", c)) re = re "[" c "]"; else re = re c }
       return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
     BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); tagre = ENVIRON["PM_TAG_RE"] }
         /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags
@@ -285,8 +289,12 @@ pre-edit)
   if [ -n "$holds" ] && [ -f "$MEM/.approvals" ]; then
     now="$(date +%s)"
     approved="$(PATHS="$paths" HOLDS="$holds_all" LC_ALL=C awk -F'\t' -v now="$now" '
-      function pm_hit(p, t,  re) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
-      re = t; gsub(/[][.+?^${}()|\\]/, "\\\\&", re); gsub(/\*\*/, "\001", re); gsub(/\*/, "[^/]*", re); gsub(/\001/, ".*", re)
+      function pm_hit(p, t,  re, i, c) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
+      # build the regex one character at a time: bracket tricks such as /[][…]/ are read differently by gawk, mawk and BWK awk
+      re = ""; for (i = 1; i <= length(t); i++) { c = substr(t, i, 1)
+        if (c == "*") { if (substr(t, i + 1, 1) == "*") { re = re ".*"; i++ } else re = re "[^/]*" }
+        else if (c == "^") re = re "\\^"; else if (c == "\\") re = re "\\\\"
+        else if (index(".+?$(){}|[]", c)) re = re "[" c "]"; else re = re c }
       return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
     BEGIN { n = split(ENVIRON["PATHS"], P, "\n"); nh = split(ENVIRON["HOLDS"], H, "\n"); tagre = ENVIRON["PM_TAG_RE"]
         for (h = 1; h <= nh; h++) { line = H[h]

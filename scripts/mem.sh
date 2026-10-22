@@ -122,8 +122,12 @@ path)
   [ $# -gt 0 ] || { echo "usage: mem.sh path <file-or-dir>"; exit 1; }
   p="$(relpath "$1")"; p="${p%/}"
   awk -v p="$p" '
-    function pm_hit(p, t,  re) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
-      re = t; gsub(/[][.+?^${}()|\\]/, "\\\\&", re); gsub(/\*\*/, "\001", re); gsub(/\*/, "[^/]*", re); gsub(/\001/, ".*", re)
+    function pm_hit(p, t,  re, i, c) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
+      # build the regex one character at a time: bracket tricks such as /[][…]/ are read differently by gawk, mawk and BWK awk
+      re = ""; for (i = 1; i <= length(t); i++) { c = substr(t, i, 1)
+        if (c == "*") { if (substr(t, i + 1, 1) == "*") { re = re ".*"; i++ } else re = re "[^/]*" }
+        else if (c == "^") re = re "\\^"; else if (c == "\\") re = re "\\\\"
+        else if (index(".+?$(){}|[]", c)) re = re "[" c "]"; else re = re c }
       return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
     BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
     FNR == 1 { gen = 0 }

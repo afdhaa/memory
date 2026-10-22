@@ -4,6 +4,11 @@ All notable changes. Versions follow [semver](https://semver.org): minor for new
 patch for fixes and reorganisation.
 
 ## 3.14.2
+- Fixes found by the first CI run, all invisible on the Linux/mawk machine used so far:
+  - macOS (bash 3.2): `scan.sh` and the prompt hook failed to parse (`case` patterns inside `$( )`
+    need a leading parenthesis there), so the scan, prompt recall and parts of the installer broke.
+  - gawk: `@path` matching used a bracket expression gawk rejects, so `#hold` and path-tagged entries
+    did nothing; the scan named an array `RT`, which gawk reserves, and lost the Node frameworks.
 - CI: the self-test runs on every push and pull request on Linux (bash 5 with mawk and with gawk)
   and on macOS with the system bash 3.2 and BWK awk.
 - Releases: pushing a `v*` tag publishes to npm from GitHub Actions with trusted publishing and
