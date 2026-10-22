@@ -2,7 +2,7 @@
 name: project-memory
 description: Persistent project memory in plain Markdown — `.memory/` at the repo root plus personal `~/.agents/memory/user.md` — shared by every coding agent. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for that path), and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, index the repo first (`mem.sh scan`). Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "apa yang sudah kita putuskan", "update memory", "review memory", "cek memori", "rapikan memori", "scan project", "scan ulang", "freeze/hold this area", corrects how you did something, or a message starts with "[project-memory]". Trigger even if memory is not mentioned whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.14.0
+  version: 3.14.1
 ---
 
 # Project Memory (v3.14)
