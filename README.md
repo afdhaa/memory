@@ -212,9 +212,16 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
 
     npx team-memory@latest            # in the project: refreshes the skill; .memory/ is untouched
 
-To uninstall, run `npx team-memory --remove-hooks`, then delete `.agents/skills/project-memory`,
-`.claude/skills/project-memory` and the `project-memory` block in `AGENTS.md`/`CLAUDE.md`.
-`.memory/` stays yours.
+To uninstall from a project:
+
+    npx team-memory --remove-hooks    # hooks and the pre-commit check; files left empty are deleted
+    rm -rf .agents/skills/project-memory .claude/skills/project-memory
+
+Then delete the `project-memory` block in `AGENTS.md` (and `CLAUDE.md`, or `CLAUDE.md` itself if it only
+says `@AGENTS.md`), and the `.memory/…` lines in `.gitignore` and `.gitattributes`. `.memory/` stays
+yours. The global skill (`--global`) lives in `~/.agents/skills`, `~/.claude/skills`,
+`~/.config/opencode/skills` and `~/.gemini/antigravity/skills` (folder `project-memory`); your
+preferences are in `~/.agents/memory/user.md`.
 
 **Without npm:** clone this repository once and use `bash <clone>/scripts/install.sh` with the same
 options as above.

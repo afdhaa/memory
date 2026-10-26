@@ -34,7 +34,7 @@ if [ ! -d "$ROOT/.memory" ]; then
   esac
 fi
 cd "$ROOT" || exit 1
-USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"
+USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"; TL='~'   # TL: a literal ~ for display
 STALE_DAYS="${PM_STALE_DAYS:-120}"
 UNCONF_DAYS="${PM_UNCONFIRMED_DAYS:-30}"
 # unconfirmed <today>: "<age days>\t<file>:<line>\t<entry>" for every "(agent, …, unconfirmed)" entry, oldest first
@@ -58,9 +58,14 @@ SUSPECT_RE='(ignore|disregard|forget|override)[[:space:]]+(all[[:space:]]+|any[[
 PIPE_RE='(curl|wget)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh([^a-z]|$)|\$\((curl|wget)[[:space:]]'
 
 # set_rule <file> <heading> <key> <line>: replace the "- <key>: …" line, or add it at the end of the heading's section
+# files edited on Windows (CRLF): edit them as LF, then restore their line endings
+CR="$(printf '\r')"
+lf_begin() { WAS_CRLF=""; grep -q "$CR\$" "$1" 2>/dev/null || return 0; WAS_CRLF=1; tr -d '\r' < "$1" > "$1.lf" && cat "$1.lf" > "$1" && rm -f "$1.lf"; }
+lf_end() { [ -n "${WAS_CRLF:-}" ] || return 0; sed "s/\$/$CR/" "$1" > "$1.cr" && cat "$1.cr" > "$1" && rm -f "$1.cr"; }
 set_rule() {
   local target="$1" heading="$2" key="$3" line="$4"
   [ -f "$target" ] || { mkdir -p "$(dirname "$target")"; printf '%s\n' "$heading" > "$target"; }
+  lf_begin "$target"
   if grep -qiE "^[[:space:]]*[-*][[:space:]]*$key:" "$target"; then
     L="$line" K="$(printf '%s' "$key" | tr 'A-Z' 'a-z')" awk 'BEGIN { k = ENVIRON["K"] } { l = tolower($0); sub(/^[[:space:]]*[-*][[:space:]]*/, "", l) } index(l, k ":") == 1 && !done { print ENVIRON["L"]; done = 1; next } { print }' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   else
@@ -74,9 +79,11 @@ set_rule() {
         for (i = s + 1; i < e; i++) { if (A[i] ~ /<!--/) c = 1; if (A[i] ~ /[^[:space:]]/) last = i; if (c && A[i] ~ /-->/) c = 0 }
         for (i = 1; i <= last; i++) print A[i]; print ENVIRON["L"]; for (i = last + 1; i <= n; i++) print A[i] }' "$target" > "$target.tmp" && mv "$target.tmp" "$target"
   fi
+  lf_end "$target"
 }
 
-mem_files() { find .memory -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | sort; }   # README.md = docs, not memory
+PM_HIT_AWK="$(cat "$HERE/pm-hit.awk")"   # pm_hit(): does an @path tag apply to a path (shared with the hooks)
+mem_files() { find -H .memory -type f -name '*.md' ! -name inbox.md ! -name README.md 2>/dev/null | sort; }   # README.md = docs, not memory
 FILES=(); while IFS= read -r f; do FILES+=("$f"); done < <(mem_files)
 hash() { printf '%s' "$1" | cksum | cut -d' ' -f1; }
 # path argument (relative to where the user ran mem.sh, or absolute) → path relative to the repo root
@@ -121,14 +128,7 @@ search)
 path)
   [ $# -gt 0 ] || { echo "usage: mem.sh path <file-or-dir>"; exit 1; }
   p="$(relpath "$1")"; p="${p%/}"
-  awk -v p="$p" '
-    function pm_hit(p, t,  re, i, c) { if (p == t || index(p, t "/") == 1) return 1; if (t !~ /\*/) return 0
-      # build the regex one character at a time: bracket tricks such as /[][…]/ are read differently by gawk, mawk and BWK awk
-      re = ""; for (i = 1; i <= length(t); i++) { c = substr(t, i, 1)
-        if (c == "*") { if (substr(t, i + 1, 1) == "*") { re = re ".*"; i++ } else re = re "[^/]*" }
-        else if (c == "^") re = re "\\^"; else if (c == "\\") re = re "\\\\"
-        else if (index(".+?$(){}|[]", c)) re = re "[" c "]"; else re = re c }
-      return (p ~ ("^" re "(/|$)")) }   # @path may use * (one folder level) and ** (any depth)
+  awk -v p="$p" "$PM_HIT_AWK"'
     BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
     FNR == 1 { gen = 0 }
     /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }   # generated scan: no @path tags
@@ -150,7 +150,8 @@ secrets)
       [ -n "$r" ] && found="$found$r"$'\n'
     done < <(git -c core.quotePath=false diff --cached --name-only -z --diff-filter=ACM -- .memory 2>/dev/null)
   else
-    found="$(grep -rnE "$SECRET_RE" .memory 2>/dev/null | grep -vE '^\.memory/(local|inbox)\.md:')"
+    # -H: .memory may be a symlink. (Not find -exec: the pattern itself contains "{}", which find would replace.)
+    found="$(find -H .memory -type f -name '*.md' 2>/dev/null | while IFS= read -r f; do grep -nE "$SECRET_RE" /dev/null "$f"; done | grep -vE '^\.memory/(local|inbox)\.md:')"
   fi
   if [ -n "${found//$'\n'/}" ]; then
     echo "✗ project-memory: possible secrets in memory files — remove them (and rotate the credential):"
@@ -161,6 +162,7 @@ secrets)
   ;;
 lint)
   issues=0; w() { echo "⚠ $*"; issues=$((issues + 1)); }
+  [ -f .memory/index.md ] || w ".memory/index.md is missing: agents read it first → run the installer again (it adds missing template files) or mem.sh scan"
   # sizes
   [ -f .memory/index.md ] && { n=$(wc -l < .memory/index.md); [ "$n" -gt 150 ] && w ".memory/index.md has $n lines (limit ~150) → consolidate"; }
   for f in ${FILES[@]+"${FILES[@]}"}; do case "$f" in .memory/index.md) continue;; esac
@@ -179,9 +181,15 @@ lint)
   # entries without a date
   while IFS= read -r m; do w "entry without date: $m"; done < <(grep -nE '^(- |[0-9]+\. )' .memory/decisions.md .memory/gotchas.md 2>/dev/null | grep -vE '[0-9]{4}-[0-9]{2}-[0-9]{2}|superseded' | head -n 10)
   # @paths that no longer exist (renamed/deleted code → memory may be wrong)
+  # patterns are checked against the repository's file list with the same pm_hit() the hooks use
+  # (bash 3.2 has no ** globbing)
+  REPO_FILES=""
   while IFS=$'\t' read -r loc tag; do
     case "$tag" in
-      *'*'*) ( shopt -s nullglob globstar 2>/dev/null; m=( "$ROOT"/${tag%/} ); [ ${#m[@]} -gt 0 ] ) || w "$loc refers to @$tag, which matches nothing any more → update the pattern or retire the entry" ;;
+      *'*'*)
+        [ -n "$REPO_FILES" ] || REPO_FILES="$( { git ls-files -co --exclude-standard 2>/dev/null || find . -type f ! -path './.git/*' | sed 's#^\./##'; } )"
+        printf '%s\n' "$REPO_FILES" | T="${tag%/}" awk "$PM_HIT_AWK"'pm_hit($0, ENVIRON["T"]) { found = 1; exit } END { exit !found }' ||
+          w "$loc refers to @$tag, which matches nothing any more → update the pattern or retire the entry" ;;
       *) [ -e "$ROOT/${tag%/}" ] || w "$loc refers to @$tag, which no longer exists → update the path or retire the entry" ;;
     esac
   done < <(awk 'BEGIN { tagre = ENVIRON["PM_TAG_RE"] }
@@ -256,14 +264,14 @@ lint)
   if git rev-parse --git-dir >/dev/null 2>&1; then
     for f in .memory/local.md .memory/progress.md .memory/inbox.md .memory/.stats.tsv .memory/.approvals; do
       [ -e "$f" ] || continue
-      if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then w "$f is committed but personal → git rm --cached $f (the file stays on disk), and add it to .gitignore"
-      elif ! git check-ignore -q "$f"; then w "$f is NOT gitignored"; fi; done
+      if git -C "$(dirname "$f")" ls-files --error-unmatch "$(basename "$f")" >/dev/null 2>&1; then w "$f is committed but personal → git rm --cached $f (the file stays on disk), and add it to .gitignore"
+      elif ! git -C "$(dirname "$f")" check-ignore -q "$(basename "$f")" 2>/dev/null; then w "$f is NOT gitignored"; fi; done
     # …and the shared files must NOT be ignored, or the team never gets them
     for f in .memory/index.md .memory/decisions.md .memory/gotchas.md; do
       [ -e "$f" ] && git check-ignore -q --no-index "$f" && { w ".memory/ is gitignored ($f), so it never reaches the team → add !.memory/ to .gitignore"; break; }; done
   fi
   # onboarding not finished: sections the agent should write after a scan
-  empty_sec() { awk -v h="## $2" '/^## /{ on = ($0 == h); if (on) seen = 1; next } on && /^[[:space:]]*<!--/ { c = !/-->/; next }
+  empty_sec() { awk -v h="## $2" '{ sub(/\r$/, "") } /^## /{ on = ($0 == h); if (on) seen = 1; next } on && /^[[:space:]]*<!--/ { c = !/-->/; next }
     on && c { if (/-->/) c = 0; next } on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }' "$1" 2>/dev/null; }
   todo=""; empty_sec .memory/index.md "Project summary" && todo="Project summary (index.md)"
   secs="How it fits together|Project layout"   # small repos (< 40 files): the generated Layout is enough
@@ -271,7 +279,7 @@ lint)
   IFS='|' read -r -a SECS <<< "$secs"
   for h in "${SECS[@]}"; do empty_sec .memory/topics/codebase.md "$h" && todo="${todo:+$todo, }\"$h\" (topics/codebase.md)"; done
   [ -n "$todo" ] && echo "ℹ still empty: $todo — write them from the scan and the code"
-  [ -f "$USER_MEM" ] || echo "ℹ user memory not found at ${USER_MEM/#$HOME/~} (set PM_USER_MEMORY, or run the installer to create it)"
+  [ -f "$USER_MEM" ] || echo "ℹ user memory not found at ${USER_MEM/#"$HOME"/$TL} (set PM_USER_MEMORY, or run the installer to create it)"
   [ "$issues" -eq 0 ] && echo "✓ memory lint: no issues" || echo "— $issues issue(s)"
   [ "$issues" -eq 0 ]
   ;;
@@ -294,7 +302,7 @@ mode)
   [ "$want" = confirm ] && line="$line (propose memory entries and write them only after the user says yes)"
   [ "$want" = auto ] && line="$line (record memory directly and report it in one line)"
   set_rule "$target" "$heading" "Memory writes" "$line"
-  echo "✓ write mode: $want (${target/#$HOME/~})"
+  echo "✓ write mode: $want (${target/#"$HOME"/$TL})"
   ;;
 review)
   uc="$(unconfirmed "$(date +%Y-%m-%d)")"
@@ -320,6 +328,8 @@ stats)
     printf '%5s lines  %4s entries  %s\n' "$(wc -l < "$f" | tr -d ' ')" "$(awk '/^[[:space:]]*<!--/ { c = 1 } c { if (/-->/) c = 0; next } /^<!-- scan:start/,/^<!-- scan:end/ { next } /^(- |[0-9]+\. |### )/ { n++ } END { print n + 0 }' "$f")" "$f"; done
   [ -f .memory/.stats.tsv ] && echo "hook injections recorded: $(wc -l < .memory/.stats.tsv | tr -d ' ') (last: $(tail -n1 .memory/.stats.tsv | cut -f1))"
   [ -f "$USER_MEM" ] && echo "user memory: $USER_MEM ($(wc -l < "$USER_MEM" | tr -d ' ') lines)"
+  exit 0
   ;;
-*) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
+help|-h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) echo "unknown command: $cmd" >&2; sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 1 ;;
 esac

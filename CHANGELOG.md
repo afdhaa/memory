@@ -4,6 +4,22 @@ All notable changes. Versions follow [semver](https://semver.org): minor for new
 patch for fixes and reorganisation.
 
 ## 3.14.2
+- Fixes from two audits (lifecycle and portability), each with a regression test:
+  - Installer: works again outside git (re-install and `--remove-hooks` stopped half-way); keeps an
+    `AGENTS.md` symlink; refreshes the block in CRLF files and keeps their line endings; puts the
+    secret check into `.husky/pre-commit` for husky 9 (not the regenerated `.husky/_`); leaves fish
+    or other non-sh hooks alone; adds missing template files to an existing `.memory/`; keeps the
+    first backup of `settings.json`; recognises `@AGENTS.md` anywhere in `CLAUDE.md`;
+    `--remove-hooks` deletes files it left empty; `--version`, usage on unknown options.
+  - Hooks: a symlinked `.memory` works (search, recall, `#hold`); control characters in memory no
+    longer break the JSON; a capture into an inbox without a final newline is not lost, and a
+    read-only `.memory` is reported; planted-text warnings work with spaces in the project path;
+    new files with non-ASCII names count for the stop reminder; CRLF memory files keep working;
+    non-UTF-8 bytes no longer hide user memory; the state folder must belong to the current user.
+  - `mem.sh`: `@path` patterns are checked the same way everywhere (`pm-hit.awk`, `**/` matches zero
+    or more folders), so bash 3.2 no longer reports `**` tags as matching nothing; secrets are found
+    in a symlinked `.memory`; lint flags a missing `index.md` and handles a `.memory` submodule;
+    unknown commands exit 1.
 - Fixes found by the first CI run, all invisible on the Linux/mawk machine used so far:
   - macOS (bash 3.2): `scan.sh` and the prompt hook failed to parse (`case` patterns inside `$( )`
     need a leading parenthesis there), so the scan, prompt recall and parts of the installer broke.

@@ -22,9 +22,10 @@ MODE="project"; HOOKS="yes"; HERE_OK=""
 VERSION="$(sed -n 's/^  version: *//p' "$SRC/SKILL.md" 2>/dev/null | head -n1)"
 for a in "$@"; do case "$a" in
   --global) MODE="global" ;; --no-hooks) HOOKS="no" ;; --remove-hooks) MODE="remove-hooks" ;; --here) HERE_OK=1 ;;
-  -h|--help) sed -n '2,16p' "$0"; exit 0 ;; *) echo "unknown option: $a"; exit 1 ;; esac; done
+  -h|--help) sed -n '2,16p' "$0"; exit 0 ;; -v|-V|--version) echo "$VERSION"; exit 0 ;;
+  *) echo "unknown option: $a (see --help)" >&2; exit 1 ;; esac; done
 
-log() { local m="$*"; [ -n "${ROOT:-}" ] && m="${m//"$ROOT/"/}"; printf '  %s\n' "$m"; }   # paths inside the project are shown relative
+log() { local m="$*" p="${ROOT:-}/"; [ -n "${ROOT:-}" ] && m="${m//"$p"/}"; printf '  %s\n' "$m"; }   # paths inside the project are shown relative
 have() { command -v "$1" >/dev/null 2>&1; }
 
 copy_skill() {
@@ -57,14 +58,16 @@ merge_hooks() {
       "$in" "$snippet" 2>&1 > "$target.tmp")"; then
     # keep a backup outside the working tree (inside .git when there is one), so it is never committed by accident
     if [ -f "$target" ]; then
-      local bak; bak="$(git -C "$ROOT" rev-parse --absolute-git-dir 2>/dev/null)"
+      local bak; bak="$(git -C "$ROOT" rev-parse --absolute-git-dir 2>/dev/null || true)"
       if [ -n "$bak" ]; then bak="$bak/project-memory-backup"; mkdir -p "$bak"; bak="$bak/$(basename "$(dirname "$target")")-$(basename "$target")"
       else bak="$target.bak"; fi
-      cp "$target" "$bak"
+      # keep the first backup: it holds the file as it was before this skill ever touched it
+      [ -f "$bak" ] || { cp "$target" "$bak"; log "  backup of the previous file: $bak"; }
       [ "$bak" != "$target.bak" ] && [ -f "$target.bak" ] && log "! $target.bak was left by an earlier install (backups now go to $bak): delete it if you do not need it"
     fi
     mv "$target.tmp" "$target"
-    if [ "$action" = add ]; then log "+ $target (project-memory hooks installed)"; else log "- $target (project-memory hooks removed)"; fi
+    if [ "$action" = add ]; then log "+ $target (project-memory hooks installed)"; else log "- $target (project-memory hooks removed)"
+      if [ -z "$(tr -d '{}[:space:]' < "$target")" ]; then rm -f "$target"; rmdir "$(dirname "$target")" 2>/dev/null || true; log "- $target (empty, deleted)"; fi; fi
   else
     rm -f "$target.tmp"
     log "! $target: ${err:-awk failed}; hooks NOT changed. Merge $snippet manually."
@@ -89,20 +92,26 @@ MD
 )
 
 upsert_bootstrap() {
-  local f="$1"
+  local f="$1" cr=""
+  # a file edited on Windows (CRLF) keeps its line endings; a symlink (AGENTS.md -> CLAUDE.md) stays a symlink
+  [ -f "$f" ] && grep -q "$(printf '\r')\$" "$f" && cr=1
   if [[ -f "$f" ]] && grep -qF "$BLOCK_START" "$f"; then
-    BLK="$BLOCK" awk -v start="$BLOCK_START" -v end="<!-- project-memory:end -->" '
-      $0==start {print ENVIRON["BLK"]; skip=1; next} skip && $0==end {skip=0; next} !skip {print}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    BLK="$BLOCK" awk -v start="$BLOCK_START" -v end="<!-- project-memory:end -->" -v cr="$cr" '
+      { sub(/\r$/, "") }
+      function out(x) { if (cr) gsub(/\n/, "\r\n", x); printf "%s%s\n", x, (cr ? "\r" : "") }
+      $0==start {out(ENVIRON["BLK"]); skip=1; next} skip && $0==end {skip=0; next} !skip {out($0)}' "$f" > "$f.tmp" && cat "$f.tmp" > "$f" && rm -f "$f.tmp"
     log "~ $f (bootstrap block updated)"
   else
-    { [[ -s "$f" ]] && printf '\n'; printf '%s\n' "$BLOCK"; } >> "$f"; log "+ $f (bootstrap block added)"
+    if [ -n "$cr" ]; then { [[ -s "$f" ]] && printf '\r\n'; printf '%s\n' "$BLOCK" | sed "s/\$/$(printf '\r')/"; } >> "$f"
+    else { [[ -s "$f" ]] && printf '\n'; printf '%s\n' "$BLOCK"; } >> "$f"; fi
+    log "+ $f (bootstrap block added)"
   fi
 }
 
-USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"
+USER_MEM="${PM_USER_MEMORY:-$HOME/.agents/memory/user.md}"; TL='~'   # TL: a literal ~ for display
 ensure_user_memory() {
-  if [ -f "$USER_MEM" ]; then log "= ${USER_MEM/#$HOME/~} (user memory exists)"
-  else mkdir -p "$(dirname "$USER_MEM")"; cp "$SRC/assets/user/user.md" "$USER_MEM"; log "+ ${USER_MEM/#$HOME/~} (user memory, all projects)"; fi
+  if [ -f "$USER_MEM" ]; then log "= ${USER_MEM/#"$HOME"/$TL} (user memory exists)"
+  else mkdir -p "$(dirname "$USER_MEM")"; cp "$SRC/assets/user/user.md" "$USER_MEM"; log "+ ${USER_MEM/#"$HOME"/$TL} (user memory, all projects)"; fi
 }
 
 add_line_once() { # file line
@@ -123,9 +132,14 @@ done || exit 1
 hooks_dir() {
   local hp top; hp="$(git -C "$ROOT" config core.hooksPath 2>/dev/null || true)"
   top="$(git -C "$ROOT" rev-parse --show-toplevel)"
+  # husky 9 points core.hooksPath at .husky/_, which it regenerates: the shared hook is .husky/pre-commit
+  case "$hp" in *.husky/_|*.husky/_/) hp="${hp%/}"; hp="${hp%/_}" ;; esac
   if [ -n "$hp" ]; then case "$hp" in /*) echo "$hp";; *) echo "$top/$hp";; esac   # relative hooksPath is relative to the git root
   else hp="$(git -C "$ROOT" rev-parse --git-path hooks)"; case "$hp" in /*) echo "$hp";; *) echo "$ROOT/$hp";; esac; fi
 }
+
+# husky 9 user hooks (.husky/pre-commit) are plain sh without a shebang
+is_husky() { case "$1" in */.husky/*) head -n1 "$1" | grep -qv '^#!' ;; *) return 1 ;; esac; }
 
 install_precommit() {
   git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || { log "- git pre-commit skipped (not a git repo)"; return; }
@@ -133,8 +147,10 @@ install_precommit() {
   local refreshed=""
   if [ -f "$f" ] && grep -qF "$PC_START" "$f"; then strip_precommit "$f"; refreshed=1; fi
   if [ -f "$f" ]; then
-    if head -n1 "$f" | grep -qE '^#!.*(ba)?sh'; then
-      BLK="$PC_BLOCK" awk 'NR==1{print; print ENVIRON["BLK"]; next} {print}' "$f" > "$f.tmp" && cat "$f.tmp" > "$f" && rm -f "$f.tmp"
+    if head -n1 "$f" | grep -qE '^#!(/usr/bin/env[[:space:]]+)?(/usr)?(/local)?(/bin/)?(ba|da|z|k)?sh([[:space:]]|$)' || is_husky "$f"; then
+      if is_husky "$f"; then BLK="$PC_BLOCK" awk 'NR==1{print ENVIRON["BLK"]} {print}' "$f" > "$f.tmp"   # no shebang: block first
+      else BLK="$PC_BLOCK" awk 'NR==1{print; print ENVIRON["BLK"]; next} {print}' "$f" > "$f.tmp"; fi
+      cat "$f.tmp" > "$f" && rm -f "$f.tmp"
       [ -n "$refreshed" ] && log "~ $f (secret check updated)" || log "+ $f (secret check inserted at the top of existing hook)"
     else log "! $f is not a shell script — add manually: bash .agents/skills/project-memory/scripts/mem.sh secrets --staged"; return; fi
   else printf '#!/bin/sh\n%s\n' "$PC_BLOCK" > "$f"; log "+ $f (blocks commits that put secrets in .memory/)"; fi
@@ -147,6 +163,8 @@ remove_precommit() {
   [ -f "$f" ] && grep -qF "$PC_START" "$f" || return 0
   strip_precommit "$f"
   log "- $f (secret check removed)"
+  # a hook the installer created holds nothing else now
+  if [ -z "$(grep -v '^#!' "$f" | tr -d '[:space:]')" ]; then rm -f "$f"; log "- $f (empty, deleted)"; fi
 }
 
 strip_precommit() {
@@ -197,8 +215,12 @@ copy_skill "$ROOT/.agents/skills"
 link_skill "$ROOT/.claude/skills" "../../.agents/skills/$NAME"
 
 if [[ -d "$ROOT/.memory" ]]; then
-  log "= .memory/ (exists, untouched)"
-  [ -f "$ROOT/.memory/README.md" ] || { cp "$SRC/assets/templates/README.md" "$ROOT/.memory/README.md"; log "+ .memory/README.md (explains the memory files to people)"; }
+  log "= .memory/ (exists; files you have are kept)"
+  ( cd "$SRC/assets/templates" && find . -type f ) | while IFS= read -r t; do t="${t#./}"
+    [ -e "$ROOT/.memory/$t" ] && continue
+    mkdir -p "$ROOT/.memory/$(dirname "$t")"; cp "$SRC/assets/templates/$t" "$ROOT/.memory/$t"
+    case "$t" in README.md) log "+ .memory/README.md (explains the memory files to people)" ;; .gitkeep|*/.gitkeep) ;; *) log "+ .memory/$t (was missing)" ;; esac
+  done
   [ -f "$ROOT/.memory/topics/codebase.md" ] || log "  tip: index this repo with: bash .agents/skills/project-memory/scripts/mem.sh scan"
 else
   cp -R "$SRC/assets/templates" "$ROOT/.memory"; log "+ .memory/ (from templates)"
@@ -245,7 +267,7 @@ if [ -L "$ROOT/CLAUDE.md" ]; then
 elif [ ! -e "$ROOT/CLAUDE.md" ]; then
   # import AGENTS.md (the project's own instructions + our block) rather than a copy of the block alone
   printf '@AGENTS.md\n' > "$ROOT/CLAUDE.md"; log "+ $ROOT/CLAUDE.md (imports AGENTS.md)"
-elif grep -qxE '[[:space:]]*@\.?/?AGENTS\.md[[:space:]]*' "$ROOT/CLAUDE.md"; then
+elif grep -qE '(^|[[:space:](])@\.?/?AGENTS\.md([[:space:]).,;:]|$)' "$ROOT/CLAUDE.md"; then
   log "= CLAUDE.md (already imports AGENTS.md)"
 elif ! awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ { o = 1 } END { exit !o }' "$ROOT/CLAUDE.md"; then
   # an earlier install wrote a CLAUDE.md holding only our block: import AGENTS.md instead

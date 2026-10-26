@@ -386,7 +386,12 @@ fi
 IDX=".memory/index.md"
 [ -f "$IDX" ] || exit 0
 # section_fill <file> <heading> <lines> <only-if-empty: 1|0> — append lines at the end of a "## heading" section
+# files edited on Windows (CRLF): edit them as LF, then restore their line endings
+CR="$(printf '\r')"
+lf_begin() { WAS_CRLF=""; grep -q "$CR\$" "$1" 2>/dev/null || return 0; WAS_CRLF=1; tr -d '\r' < "$1" > "$1.lf" && cat "$1.lf" > "$1" && rm -f "$1.lf"; }
+lf_end() { [ -n "${WAS_CRLF:-}" ] || return 0; sed "s/\$/$CR/" "$1" > "$1.cr" && cat "$1.cr" > "$1" && rm -f "$1.cr"; }
 section_fill() {
+  lf_begin "$1"
   LINES="$3" awk -v h="## $2" -v only="$4" '
     { L[++n] = $0 }
     END {
@@ -403,6 +408,7 @@ section_fill() {
       if (!(only == 1 && full)) print ENVIRON["LINES"]
       for (i = last + 1; i <= n; i++) print L[i]
     }' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+  lf_end "$1"
 }
 if ! grep -q 'topics/codebase\.md' "$IDX"; then
   section_fill "$IDX" "Map" "- topics/codebase.md — how the code fits together, what each folder is for, plus generated repo facts: stack, commands, layout, config, CI (refresh: mem.sh scan)" 0
