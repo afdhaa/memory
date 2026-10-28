@@ -483,6 +483,27 @@ fi
 chmod -R u+w .memory 2>/dev/null
 cd "$S"
 
+echo "• long-run test fixes"
+LR="$TMP/longrun"; mkdir -p "$LR/src/pay" && cd "$LR" && git init -q && git config user.email t@t && git config user.name t
+HOME="$TMP/lrhome" bash "$SRC/scripts/install.sh" </dev/null >/dev/null 2>&1
+{ printf '# Progress\n\n## Done recently\n'; for i in 1 2 3 4 5 6 7; do printf -- '- item %s\n' "$i"; done; } > .memory/progress.md
+o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"; check "lint: more than 5 Done recently lines" 'printf "%s" "$o" | grep -q "has 7 lines (max 5)"' "$o"
+lc() { printf '{"session_id":"%s-%s","cwd":"%s","prompt":"%s"}' "$RUN" "$1" "$LR" "$2" | bash "$SRC/hooks/pm-hook.sh" prompt claude >/dev/null; grep -c "$3" .memory/inbox.md 2>/dev/null || echo 0; }
+check "capture: 'jangan lupa' inside a task is not a correction" '[ "$(lc c1 "Tambah promo beli 3 gratis 1, jangan lupa aturan harga yang ada." "promo beli")" = 0 ]'
+check "capture: 'never mind' is not a correction" '[ "$(lc c2 "Also print prices nicely, actually never mind." "print prices")" = 0 ]'
+check "capture: 'wajib' is a standing instruction" '[ "$(lc c3 "Di project ini setiap fungsi publik wajib punya docstring." "wajib punya docstring")" = 1 ]'
+rm -f .memory/inbox.md
+printf -- '- 2026-10-01 · The payment gateway rejects more than five calls per second with HTTP 429. #payments @src/pay/ (user)\n' >> .memory/gotchas.md
+cat >> .memory/topics/codebase.md <<'TXT'
+The payments module wraps the gateway client and the checkout code calls it once per order in a loop.
+Payments retries are logged by the gateway module; payments tests patch the clock for the gateway.
+TXT
+o="$(printf '{"session_id":"%s-pr","cwd":"%s","prompt":"payments gateway calls fail with 429"}' "$RUN" "$LR" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
+check "recall: a gotcha ranks above overview prose, and at most one prose line" 'printf "%s" "$o" | grep -q "gotchas.md.*five calls" && [ "$(printf "%s" "$o" | grep -o "codebase.md:[0-9]*" | wc -l | tr -d " ")" -le 1 ]' "$o"
+echo x > src/pay/old.py && git add -A && git commit -qm f && rm src/pay/old.py
+o="$(bash "$SRC/scripts/mem.sh" scan --print 2>&1)"; check "scan leaves out files deleted but not yet staged" '! printf "%s" "$o" | grep -q "^- .src/. "' "$(printf "%s" "$o" | grep -n "src" | head -3)"
+cd "$S"
+
 echo "• scan accuracy"
 Z="$TMP/flask"; mkdir -p "$Z/tests" "$Z/src/flask" && cd "$Z" && git init -q && git config user.email t@t && git config user.name t
 printf '[project]\nname = "Flask"\ndependencies = ["werkzeug", "pydantic"]\n' > pyproject.toml; printf 'flask\n' > requirements.txt

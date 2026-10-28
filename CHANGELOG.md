@@ -3,6 +3,20 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.15.0
+From a 20-session test: one project, each session a fresh agent that knew only `.memory/`. Memory
+grew from 169 to 227 lines, lint stayed clean, no duplicates, and every knowledge check (14
+questions in sessions 7, 14 and 20) was answered correctly from memory. Fixes for what it found:
+- `progress.md` stays a state, not a log: the template has a "Done recently" section of at most 5
+  lines, the writing guide says to drop items that are done or no longer true, and lint warns above 5.
+- Correction capture: "wajib", "mulai sekarang", "from now on", "must always/never" count as standing
+  instructions; "jangan lupa", "don't forget" and "never mind" inside a task request no longer do.
+- Prompt recall ranks rules, decisions and gotchas above overview prose (`topics/codebase.md`,
+  topic paragraphs), and injects at most one prose line per message.
+- SKILL.md: thanks or praise for the work ("mantap") is not approval of an entry the agent recorded;
+  evidence in `Why:` names how something was checked, not numbers that change every commit.
+- Scan: files deleted but not yet staged are left out; "has 1 file" wording.
+
 ## 3.14.3
 - Descriptions: SKILL.md (shown on skills.sh and read by agents) now opens with what the skill is,
   and stays under the 1,024-character limit; the npm description says what is remembered and where.

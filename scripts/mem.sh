@@ -178,6 +178,11 @@ lint)
     while IFS= read -r f; do grep -qF "$f" .memory/index.md || w "$f is not listed in the Map section of index.md"
     done < <(find .memory/topics .memory/procedures -type f -name '*.md' 2>/dev/null | sed 's#^\.memory/##' | sort)
   fi
+  # progress.md is a state, not a log
+  if [ -f .memory/progress.md ]; then
+    nd="$(awk '/^## /{ on = ($0 ~ /^## Done/) ; next } on && /^- /{ n++ } END { print n + 0 }' .memory/progress.md)"
+    [ "$nd" -gt 5 ] && w ".memory/progress.md: \"Done recently\" has $nd lines (max 5) → keep the newest; decisions and lessons belong in decisions.md / gotchas.md"
+  fi
   # entries without a date
   while IFS= read -r m; do w "entry without date: $m"; done < <(grep -nE '^(- |[0-9]+\. )' .memory/decisions.md .memory/gotchas.md 2>/dev/null | grep -vE '[0-9]{4}-[0-9]{2}-[0-9]{2}|superseded' | head -n 10)
   # @paths that no longer exist (renamed/deleted code → memory may be wrong)
@@ -275,7 +280,7 @@ lint)
     on && c { if (/-->/) c = 0; next } on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }' "$1" 2>/dev/null; }
   todo=""; empty_sec .memory/index.md "Project summary" && todo="Project summary (index.md)"
   secs="How it fits together|Project layout"   # small repos (< 40 files): the generated Layout is enough
-  [ "$(sed -n 's/.* has \([0-9][0-9]*\) files.*/\1/p' .memory/topics/codebase.md 2>/dev/null | head -n1)" -lt 40 ] 2>/dev/null && secs="How it fits together"
+  [ "$(sed -n 's/.* has \([0-9][0-9]*\) file.*/\1/p' .memory/topics/codebase.md 2>/dev/null | head -n1)" -lt 40 ] 2>/dev/null && secs="How it fits together"
   IFS='|' read -r -a SECS <<< "$secs"
   for h in "${SECS[@]}"; do empty_sec .memory/topics/codebase.md "$h" && todo="${todo:+$todo, }\"$h\" (topics/codebase.md)"; done
   [ -n "$todo" ] && echo "ℹ still empty: $todo — write them from the scan and the code"

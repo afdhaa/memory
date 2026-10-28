@@ -2,7 +2,7 @@
 name: project-memory
 description: Long-term project memory for coding agents, kept as plain Markdown in the repo (`.memory/`) and shared by the team and every agent, plus personal preferences in `~/.agents/memory/user.md`. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for its path) and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, run `mem.sh scan` first. Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "update memory", "review memory", "cek memori", "rapikan memori", "scan ulang", "freeze this area", corrects how you did something, or a message starts with "[project-memory]". Trigger whenever the repo has a `.memory/` folder.
 metadata:
-  version: 3.14.3
+  version: 3.15.0
 ---
 
 # Project Memory (v3.14)
@@ -72,7 +72,7 @@ Write **when it happens**, not only at the end:
 | Something non-obvious bit you (setup step, flaky test, misleading name) | `gotchas.md` |
 | A multi-step workflow worked and will recur | `procedures/<name>.md` |
 | Substantial knowledge about one area | `topics/<area>.md`, added to the map |
-| The state of the work changed (not after a pure question) | rewrite `progress.md` (personal) |
+| The state of the work changed (not after a pure question) | rewrite `progress.md` (personal): drop what is done or no longer true; "Done recently" keeps 5 lines at most |
 | Finished work users of the project will notice (feature, fix, breaking change) — not refactors, tests or chores | the project's changelog as `mem.sh changelog` says (a file, fragments, or nothing when notes are generated from commits); none found: ask once, record `- Changelog: CHANGELOG.md` or `- Changelog: none` as a Rule (no answer yet: note the question under Blocked in `progress.md`) |
 | Your change makes a sentence in `topics/` or a procedure wrong | fix it now |
 
@@ -123,13 +123,15 @@ Rules: one sentence with its reason (add the obvious one if the user gave none),
 
 **Tags:** `#topic` for search; `@path` (repo-relative, folders end with `/`; `*` = any characters
 within one path segment, as in `@completions*.go` or `@app/*/migrations/`; `**` = any depth) whenever an entry is about specific code — it appears before edits there and lint
-flags it when the code moves; `#hold` only when the user asks; evidence goes in `Why:` (`verified: ran npm test`).
+flags it when the code moves; `#hold` only when the user asks; evidence goes in `Why:` (`verified: ran npm test`), without numbers that change every commit (test
+counts, line numbers).
 
 ## Confidence
 
 What the user said is confirmed: `(user, …)`. What **you** concluded starts as
 `(agent, seen: 1, unconfirmed)`. Remove `, unconfirmed` when:
-1. the user approves it (in chat or in a PR review);
+1. the user approves **that entry** (in chat or in a PR review). Thanks or praise for the work
+   ("great", "mantap", "thanks") is not approval of an entry you recorded;
 2. it comes up again in a later session (`seen: 2`);
 3. you proved it this session: a run (test, command) proves anything; reading code proves only
    static facts (a config value, which function calls which), not runtime behaviour.

@@ -25,6 +25,9 @@ clip() { awk -v n="$1" 'BEGIN { hi = sprintf("[%c-%c]+$", 128, 255) }
 
 # ---- files (relative to ROOT), without memory/agent folders ----
 if [ -n "$IS_GIT" ]; then FILES="$(git -c core.quotePath=false ls-files -co --exclude-standard 2>/dev/null)"
+  # files deleted in the working tree but not staged yet are still in the index: leave them out
+  DEL="$(git -c core.quotePath=false ls-files -d 2>/dev/null)"
+  [ -n "$DEL" ] && FILES="$(printf '%s\n' "$FILES" | grep -vxF -f <(printf '%s\n' "$DEL"))"
 else FILES="$(find . \( -name .git -o -name node_modules -o -name vendor -o -name dist -o -name build -o -name target \
   -o -name .venv -o -name venv -o -name __pycache__ -o -name .next -o -name .cache \) -prune -o -type f -print 2>/dev/null | sed 's#^\./##')"; fi
 FILES="$(printf '%s\n' "$FILES" | grep -vE '(^|/)(\.memory|\.agents|\.claude|\.codex|\.omp|\.git)/' | grep -v '^$' | sort)"
@@ -310,7 +313,7 @@ sec() { [ -n "$(printf '%s' "$3" | tr -d '[:space:]')" ] && printf '\n### %s\n%s
 BODY="$(
   printf '### Overview\n'
   [ "$(printf '%s' "$TITLE" | tr 'A-Z' 'a-z')" = "$(basename "$ROOT" | tr 'A-Z' 'a-z')" ] && TITLE=""
-  printf '**%s**%s has %s files%s.\n' "$(basename "$ROOT")" "${TITLE:+ ("$TITLE")}" "$NFILES" "${LANG_LINE:+ — by language: $LANG_LINE}"
+  printf '**%s**%s has %s file%s%s.\n' "$(basename "$ROOT")" "${TITLE:+ ("$TITLE")}" "$NFILES" "$([ "$NFILES" = 1 ] || echo s)" "${LANG_LINE:+ — by language: $LANG_LINE}"
   [ -n "$README_SUM" ] && printf 'It describes itself as: "%s"\n' "$README_SUM"
   [ -n "$GIT" ] && printf '%s\n' "$GIT"
   [ -n "$DOCS" ] && printf 'Documentation to read first: %s.\n' "$DOCS"

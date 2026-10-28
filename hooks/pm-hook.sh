@@ -126,7 +126,7 @@ $files"
       on && /[^[:space:]]/ { full = 1 } END { exit (full || !seen) }'; }
   cbm=""; if [ -f "$MEM/topics/codebase.md" ]; then
     # a small repo (the scan counts its files) needs a short explanation, and the generated Layout already lists everything
-    nf="$(sed -n 's/.* has \([0-9][0-9]*\) files.*/\1/p' "$MEM/topics/codebase.md" | head -n1)"
+    nf="$(sed -n 's/.* has \([0-9][0-9]*\) file.*/\1/p' "$MEM/topics/codebase.md" | head -n1)"
     if [ "${nf:-999}" -lt 40 ]; then
       section_empty "How it fits together" < "$MEM/topics/codebase.md" && cbm="the \"How it fits together\" section (small repo: 1–2 short paragraphs on what the main file does and how a call flows through it; leave \"Project layout\" empty unless a file's role is not obvious from its name)"
     else
@@ -175,7 +175,9 @@ prompt)
   if [ -z "$src" ] || [ "$src" = "user" ]; then
     # a question that only asks about memory ("what do you remember about…?") is not a correction
     QONLY=""; printf '%s' "$PROMPT" | grep -qE '\?[[:space:]]*$' && ! printf '%s' "$PROMPT" | grep -qiE "(^|[^a-z])(jangan|salah|keliru|seharusnya|harusnya|dont|don't|do not|never|wrong|instead|should have|stop doing)([^a-z]|$)" && QONLY=1
-    if [ -z "$QONLY" ] && printf '%s' "$PROMPT" | grep -qiE "(^|[^a-z])(jangan|salah|keliru|bukan (begitu|itu|gitu|ini)|seharusnya|harusnya|mestinya|lain kali|ingat( ya|lah)?|tolong ingat|kok malah|kenapa malah|selalu|dont|don't|do not|never|always|instead|wrong|that's not|stop doing|remember|should have|next time)([^a-z]|$)"; then
+    # "jangan lupa …" / "don't forget …" / "never mind" inside a task are not standing instructions
+    PCAP="$(printf '%s' "$PROMPT" | sed -E 's/([Jj]angan[[:space:]]+lupa|[Dd]on.t[[:space:]]+forget|[Nn]ever[[:space:]]*mind)//g')"
+    if [ -z "$QONLY" ] && printf '%s' "$PCAP" | grep -qiE "(^|[^a-z])(wajib|harus selalu|mulai sekarang|ke depannya|from now on|must always|must never|jangan|salah|keliru|bukan (begitu|itu|gitu|ini)|seharusnya|harusnya|mestinya|lain kali|ingat( ya|lah)?|tolong ingat|kok malah|kenapa malah|selalu|dont|don't|do not|never|always|instead|wrong|that's not|stop doing|remember|should have|next time)([^a-z]|$)"; then
       excerpt="$(printf '%s' "$PROMPT" | redact | cut -c1-300)"
       key="$(hash "$excerpt")"
       if ! grep -qF "<!-- $key -->" "$MEM/inbox.md" 2>/dev/null; then
@@ -210,6 +212,8 @@ prompt)
         if (line ~ /^[[:space:]]*$/ || line ~ /^>/ || line ~ /^#+ [^0-9]/) next
         if (n > 0 && F[n] == FILENAME && (line ~ /^[[:space:]]+(Do instead|Why|Rejected|Revisit if):/ || line ~ /^(Why|Rejected|Revisit if):/)) { sub(/^[[:space:]]+/, "", line); U[n] = U[n] " ↳ " line; next }
         n++; U[n] = line; F[n] = FILENAME; L[n] = FNR
+        # background prose (topic paragraphs, the codebase overview) ranks below rules, decisions and gotchas
+        P[n] = (FILENAME ~ /topics\/codebase\.md$/ || (FILENAME ~ /\/topics\// && line !~ /^([-*] |[0-9]+\. |### )/))
       }
       END {
         for (i = 1; i <= n; i++) { low = tolower(U[i]); for (t = 1; t <= nt; t++) if (low ~ ("(^|[^a-z0-9])" T[t])) { M[i, t] = 1; DF[t]++ } }
@@ -219,12 +223,14 @@ prompt)
           for (t = 1; t <= nt; t++) if ((i, t) in M) { s += log(1 + n / DF[t]); c++; if (index(low, "#" T[t]) || index(low, "/" T[t])) { s += 1; tag = 1 } }
           # accept: enough distinct terms, or a tag hit, or one specific term (≥5 chars, rare in memory)
           rare = 0; for (t = 1; t <= nt; t++) if ((i, t) in M && length(T[t]) >= 5 && DF[t] <= 2) rare = 1
-          if (c >= need || (c >= 1 && (tag || rare))) S[i] = s
+          if (P[i]) { if (c >= need) S[i] = s / 2 }   # prose needs real overlap and counts half
+          else if (c >= need || (c >= 1 && (tag || rare))) S[i] = s
         }
         for (r = 1; r <= k; r++) {
           best = 0; bi = 0
-          for (i in S) if (S[i] > best) { best = S[i]; bi = i }
+          for (i in S) if (S[i] > best && !(P[i] && prose >= 1)) { best = S[i]; bi = i }   # at most one prose paragraph
           if (!bi) break
+          if (P[bi]) prose++
           f = F[bi]; if (index(f, root) == 1) f = substr(f, length(root) + 1)
           u = U[bi]; if (length(u) > 320) u = substr(u, 1, 317) "…"   # a long paragraph: its start is enough to know to open the file
           print f ":" L[bi] ": " u; delete S[bi]

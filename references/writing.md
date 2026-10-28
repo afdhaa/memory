@@ -127,6 +127,9 @@ Short paragraphs or numbered steps describing the flow, naming the key files and
 **If it fails:** ...
 ```
 
+**Evidence** in `Why:` names how something was checked (`verified: ran make test`), not numbers that
+change with every commit (test counts, line numbers, durations): those make a true entry look stale.
+
 **Progress** (`progress.md`, personal, not committed) — rewritten at the end of every task so that
 whoever picks up the work tomorrow knows where things stand. Per item: one sentence on what it is and why it matters,
 then the next concrete step, or what it is waiting on and who:
@@ -139,7 +142,12 @@ then the next concrete step, or what it is waiting on and who:
 
 ## Blocked / waiting on
 - Adding `"type": "module"` to package.json — waiting for the user's decision.
+
+## Done recently
+- Retry for HTTP 429 in `publishAll()` (at most 5 lines here, newest first; drop the oldest).
 ```
+Rewrite the whole file each time: remove items that are finished, no longer true or superseded
+(a "blocked" item whose blocker is gone), so it never grows into a log.
 
 **`topics/codebase.md`** — two sections you write after a scan (the scan never changes them):
 
