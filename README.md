@@ -27,6 +27,17 @@ The agent writes a short summary of the project and how its code fits together. 
 reads memory at the start of each task and records what is worth keeping. Commit `.memory/` so your
 team and their agents share it.
 
+### From skills.sh
+
+The skill is also listed on [skills.sh](https://skills.sh), the open directory of agent skills:
+
+    npx skills add afdhaa/team-memory
+
+This copies the skill (`project-memory`) into your agents' skill folders, and nothing else: no hooks,
+no pre-commit secret check, no instruction block in AGENTS.md. The skill still works — the agent
+creates `.memory/` itself on first use — but recall before edits, the `#hold` gate and the reminder
+before stopping need the hooks. To get them, run `npx team-memory` in the project as well.
+
 ## What it installs
 
 ```
@@ -189,8 +200,10 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
 
 - **No network access.** The scripts make no HTTP requests and send no telemetry; git is only read
   locally (`git ls-files`, `git log`), never fetched or pushed.
-- **Official sources:** the npm package [`team-memory`](https://www.npmjs.com/package/team-memory) and
-  [github.com/afdhaa/memory](https://github.com/afdhaa/memory). Anything else claiming to be this skill is not.
+- **Official sources:** the npm package [`team-memory`](https://www.npmjs.com/package/team-memory),
+  [github.com/afdhaa/team-memory](https://github.com/afdhaa/team-memory) and its listing on skills.sh
+  (`afdhaa/team-memory`). Anything else claiming to be this skill is not. Versions published by GitHub
+  Actions carry npm provenance: the npm page links them to the commit and workflow run that built them.
 - **Memory reaches your model provider.** The hooks add memory to the agent's context, which is sent
   to Anthropic, OpenAI or whichever provider your agent uses, like any file the agent reads. Whether
   it is used for training depends on your account and plan with them.
@@ -241,7 +254,7 @@ with the system bash 3.2 and BWK awk.
 The *Publish to npm* workflow checks that the tag matches both files, runs the self-test and
 publishes with npm trusted publishing: no npm token is stored, and the npm page shows a provenance
 statement linking the package to this repository. One-time setup on npmjs.com: package
-**Settings → Trusted Publisher → GitHub Actions**, repository `afdhaa/memory`, workflow `publish.yml`.
+**Settings → Trusted Publisher → GitHub Actions**, repository `afdhaa/team-memory`, workflow `publish.yml`.
 Without it, publish by hand with `npm publish` (asks for the 2FA code).
 
 ## License

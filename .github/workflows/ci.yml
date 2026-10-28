@@ -8,10 +8,16 @@ on:
 permissions:
   contents: read
 
+# a new push to the same branch or pull request cancels the run still waiting for a macOS runner
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   selftest:
     name: selftest (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20   # the self-test takes about a minute; anything longer is stuck
     strategy:
       fail-fast: false
       matrix:

@@ -3,6 +3,15 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 3.14.3
+- Descriptions: SKILL.md (shown on skills.sh and read by agents) now opens with what the skill is,
+  and stays under the 1,024-character limit; the npm description says what is remembered and where.
+- README: installing from skills.sh (`npx skills add afdhaa/team-memory`) and what it leaves out (hooks,
+  secret check, AGENTS.md block); official sources include the skills.sh listing and npm provenance.
+- CI: jobs stop after 20 minutes, and a new push cancels the previous run.
+- The repository is now github.com/afdhaa/team-memory (the old URL redirects), so npm, skills.sh and
+  GitHub all use the same name.
+
 ## 3.14.2
 - Fixes from two audits (lifecycle and portability), each with a regression test:
   - Installer: works again outside git (re-install and `--remove-hooks` stopped half-way); keeps an
