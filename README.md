@@ -1,3 +1,5 @@
+<img src=".claude-plugin/icon.png" alt="" width="96" align="right">
+
 # team-memory
 
 [![npm](https://img.shields.io/npm/v/team-memory)](https://www.npmjs.com/package/team-memory)
