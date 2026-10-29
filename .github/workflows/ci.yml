@@ -53,4 +53,7 @@ jobs:
 
       - name: npm package contents
         if: runner.os == 'Linux' && matrix.awk == 'mawk'
-        run: npm pack --dry-run
+        run: |
+          name="$(node -p 'require("./package.json").name')"
+          [ "$name" = team-memory ] || { echo "package.json name is $name, expected team-memory"; exit 1; }
+          npm pack --dry-run

@@ -24,8 +24,10 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Tag, package.json and SKILL.md carry the same version
+      - name: Tag, package.json and SKILL.md carry the same version; the package is team-memory
         run: |
+          name="$(node -p 'require("./package.json").name')"
+          [ "$name" = team-memory ] || { echo "package.json name is $name, expected team-memory"; exit 1; }
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p 'require("./package.json").version')"
           skill="$(sed -n 's/^  version: *//p' SKILL.md | head -n1)"
