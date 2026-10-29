@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# project-memory: how this project records changes for its users — sourced by mem.sh, scan.sh and the hooks.
+# team-memory: how this project records changes for its users — sourced by mem.sh, scan.sh and the hooks.
 #   changelog_info <project-root>  →  "<kind>\t<file, folder or tool>\t<what an agent should do>"
 # kind: rule (index.md says), fragments (changesets, towncrier, release-notes folder…), generated (from commits
 # or PR titles), file (an existing changelog), none (nothing found: ask the user, never create one unasked)

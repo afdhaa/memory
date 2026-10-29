@@ -33,7 +33,7 @@ The skill is also listed on [skills.sh](https://skills.sh), the open directory o
 
     npx skills add afdhaa/team-memory
 
-This copies the skill (`project-memory`) into your agents' skill folders, and nothing else: no hooks,
+This copies the skill (`team-memory`) into your agents' skill folders, and nothing else: no hooks,
 no pre-commit secret check, no instruction block in AGENTS.md. The skill still works — the agent
 creates `.memory/` itself on first use — but recall before edits, the `#hold` gate and the reminder
 before stopping need the hooks. To get them, run `npx team-memory` in the project as well.
@@ -51,7 +51,7 @@ your-project/
 │   ├── procedures/<name>.md      # step-by-step workflows that repeat
 │   ├── README.md                 # explains these files to teammates
 │   └── progress.md, local.md, inbox.md     # personal, not committed
-├── .agents/skills/project-memory/    # the skill (Claude Code gets a link in .claude/skills/)
+├── .agents/skills/team-memory/   # the skill (Claude Code gets a link in .claude/skills/)
 ├── AGENTS.md, CLAUDE.md          # a short instruction block; a new CLAUDE.md imports AGENTS.md
 ├── .claude/settings.json, .codex/hooks.json   # hooks for Claude Code and Codex
 └── .gitignore, .gitattributes, pre-commit     # personal files out of git, merge-friendly, secret check
@@ -71,7 +71,7 @@ your-project/
 
 Run it from the root of the repository: in your home folder it refuses, and in a subfolder it asks
 first. Safe to re-run: `.memory/` and `user.md` are never overwritten, your own hooks and pre-commit hook are
-kept, and the previous `settings.json`/`hooks.json` is backed up in `.git/project-memory-backup/`.
+kept, and the previous `settings.json`/`hooks.json` is backed up in `.git/team-memory-backup/`.
 
 ## How it works
 
@@ -142,9 +142,9 @@ numbered, and writes what you approve (`all`, `1,3`, `2: <change>` or `none`).
 Switch by telling the agent ("ask before saving memory" / "mode konfirmasi"; back with "mode
 otomatis"), or with the helper:
 
-    bash .agents/skills/project-memory/scripts/mem.sh mode confirm            # this project
-    bash .agents/skills/project-memory/scripts/mem.sh mode confirm --global   # all your projects
-    bash .agents/skills/project-memory/scripts/mem.sh mode auto
+    bash .agents/skills/team-memory/scripts/mem.sh mode confirm            # this project
+    bash .agents/skills/team-memory/scripts/mem.sh mode confirm --global   # all your projects
+    bash .agents/skills/team-memory/scripts/mem.sh mode auto
 
 It is the line `- Memory writes: confirm` in `.memory/index.md` (or in `user.md`); the project wins.
 
@@ -152,7 +152,7 @@ It is the line `- Memory writes: confirm` in `.memory/index.md` (or in `user.md`
 
 From the project root:
 
-    M=.agents/skills/project-memory/scripts/mem.sh
+    M=.agents/skills/team-memory/scripts/mem.sh
     bash $M search pricing product   # ranked search through project and user memory
     bash $M path src/api/            # entries that apply to a file or folder
     bash $M lint                     # size, secrets, stale or duplicate entries, missing paths, filler words
@@ -174,7 +174,7 @@ explanation above it ("How it fits together" and "Project layout"); a re-scan ne
 |---|---|---|
 | Claude Code | `.claude/skills/` | yes, in `.claude/settings.json` |
 | Codex | `.agents/skills/` | yes, in `.codex/hooks.json` |
-| Pi / omp | `.agents/skills/`, `~/.agents/skills/` | no: the agent follows the skill itself (type `/skill:project-memory` to load it) |
+| Pi / omp | `.agents/skills/`, `~/.agents/skills/` | no: the agent follows the skill itself (type `/skill:team-memory` to load it) |
 | OpenCode, Antigravity | `.agents/skills/` | no: through the block in AGENTS.md |
 
 Turn the hooks off for a session with `export PM_HOOKS=off`. Tuning: `PM_RECALL_MAX` (entries per
@@ -217,7 +217,7 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
   every teammate's machine, so have changes reviewed, for example in `.github/CODEOWNERS`:
 
       /.memory/                          @your-org/maintainers
-      /.agents/skills/project-memory/    @your-org/maintainers
+      /.agents/skills/team-memory/    @your-org/maintainers
       /.claude/settings.json             @your-org/maintainers
       /.codex/hooks.json                 @your-org/maintainers
 
@@ -228,13 +228,20 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
 To uninstall from a project:
 
     npx team-memory --remove-hooks    # hooks and the pre-commit check; files left empty are deleted
-    rm -rf .agents/skills/project-memory .claude/skills/project-memory
+    rm -rf .agents/skills/team-memory .claude/skills/team-memory
 
-Then delete the `project-memory` block in `AGENTS.md` (and `CLAUDE.md`, or `CLAUDE.md` itself if it only
+Then delete the `team-memory` block in `AGENTS.md` (and `CLAUDE.md`, or `CLAUDE.md` itself if it only
 says `@AGENTS.md`), and the `.memory/…` lines in `.gitignore` and `.gitattributes`. `.memory/` stays
 yours. The global skill (`--global`) lives in `~/.agents/skills`, `~/.claude/skills`,
-`~/.config/opencode/skills` and `~/.gemini/antigravity/skills` (folder `project-memory`); your
+`~/.config/opencode/skills` and `~/.gemini/antigravity/skills` (folder `team-memory`); your
 preferences are in `~/.agents/memory/user.md`.
+
+**Upgrading from 3.x:** before 4.0.0 the skill was named `project-memory`. Run `npx team-memory@latest`
+in the project once: it removes `.agents/skills/project-memory` and `.claude/skills/project-memory`,
+moves the hooks, the AGENTS.md/CLAUDE.md block and the pre-commit check to the new name, and updates
+the paths in `.memory/README.md`. Commit the result so teammates get it. `--global` does the same for
+the global copies. Installed from skills.sh? Run `npx skills remove project-memory`, then
+`npx skills add afdhaa/team-memory`.
 
 **Without npm:** clone this repository once and use `bash <clone>/scripts/install.sh` with the same
 options as above.

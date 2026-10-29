@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" session-start codex; else echo '{}'; fi",
+            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" session-start codex; else echo '{}'; fi",
             "timeout": 10
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" prompt codex; else echo '{}'; fi",
+            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" prompt codex; else echo '{}'; fi",
             "timeout": 10
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" pre-edit codex; else echo '{}'; fi",
+            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" pre-edit codex; else echo '{}'; fi",
             "timeout": 10
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/project-memory/hooks/pm-hook.sh\" stop codex; else echo '{}'; fi",
+            "command": "d=\"$PWD\"; while [ \"$d\" != / ] && [ ! -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; do d=\"$(dirname \"$d\")\"; done; if [ -f \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" ]; then bash \"$d/.agents/skills/team-memory/hooks/pm-hook.sh\" stop codex; else echo '{}'; fi",
             "timeout": 15
           }
         ]

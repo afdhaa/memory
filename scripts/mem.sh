@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# project-memory helper (v3) — pure bash/awk.
+# team-memory helper (v3) — pure bash/awk.
 #   mem.sh search <words…>      ranked search across .memory/ and user memory
 #   mem.sh path <file-or-dir>   entries tagged @path that apply to it
 #   mem.sh lint                 size, caps, secrets, map, missing @paths, stale & duplicate entries, filler wording
@@ -154,7 +154,7 @@ secrets)
     found="$(find -H .memory -type f -name '*.md' 2>/dev/null | while IFS= read -r f; do grep -nE "$SECRET_RE" /dev/null "$f"; done | grep -vE '^\.memory/(local|inbox)\.md:')"
   fi
   if [ -n "${found//$'\n'/}" ]; then
-    echo "✗ project-memory: possible secrets in memory files — remove them (and rotate the credential):"
+    echo "✗ team-memory: possible secrets in memory files — remove them (and rotate the credential):"
     printf '%s\n' "$found" | sed '/^$/d' | cut -c1-160 | head -n 20
     echo "  (false positive? reword the entry; to bypass once: git commit --no-verify)"
     exit 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# project-memory self-test. Runs everything in a throwaway repo; touches nothing of yours.
+# team-memory self-test. Runs everything in a throwaway repo; touches nothing of yours.
 #   bash scripts/selftest.sh
 set -u
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,12 +12,12 @@ bad()  { fail=$((fail + 1)); printf '  ✗ %s\n' "$1"; [ -n "${2:-}" ] && printf
 check() { if eval "$2"; then ok "$1"; else bad "$1" "${3:-}"; fi; }
 valid_json() { if command -v python3 >/dev/null 2>&1; then printf '%s' "$1" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; else case "$1" in \{*\}) return 0;; *) return 1;; esac; fi; }
 H() { # H <event> <agent> <json>  — run the hook the way the agent would (from a subfolder)
-  local out; out="$(cd "$P/src" && printf '%s' "$3" | bash "$P/.agents/skills/project-memory/hooks/pm-hook.sh" "$1" "$2")"
+  local out; out="$(cd "$P/src" && printf '%s' "$3" | bash "$P/.agents/skills/team-memory/hooks/pm-hook.sh" "$1" "$2")"
   valid_json "$out" || bad "valid JSON from $1/$2" "$out"; printf '%s' "$out"; }
 RUN="t$$$(date +%s)"                     # unique session ids per run
 J() { printf '{"session_id":"%s","cwd":"%s"%s}' "$RUN-$1" "$P" "${2:-}"; }
 
-echo "project-memory self-test  (bash $BASH_VERSION, awk: $(awk --version 2>/dev/null | head -n1 || echo system))"
+echo "team-memory self-test  (bash $BASH_VERSION, awk: $(awk --version 2>/dev/null | head -n1 || echo system))"
 mkdir -p "$P/src/api" "$P/logs" && cd "$P" || exit 1
 git init -q && git config user.email t@t && git config user.name t
 echo "x" > src/app.js; echo "x" > src/api/client.js; echo "logs/" > .gitignore
@@ -35,12 +35,12 @@ fi
 
 echo "• install"
 out="$(bash "$SRC/scripts/install.sh" 2>&1)"; check "installer exits cleanly" '[ $? -eq 0 ]' "$out"
-for f in .agents/skills/project-memory/SKILL.md .agents/skills/project-memory/references/writing.md .agents/skills/project-memory/references/workflows.md .claude/skills/project-memory/SKILL.md .memory/index.md AGENTS.md CLAUDE.md .claude/settings.json .codex/hooks.json .gitattributes "$PM_USER_MEMORY"; do
+for f in .agents/skills/team-memory/SKILL.md .agents/skills/team-memory/references/writing.md .agents/skills/team-memory/references/workflows.md .claude/skills/team-memory/SKILL.md .memory/index.md AGENTS.md CLAUDE.md .claude/settings.json .codex/hooks.json .gitattributes "$PM_USER_MEMORY"; do
   check "exists: ${f#$TMP/}" "[ -e \"$f\" ]"; done
 bash "$SRC/scripts/install.sh" >/dev/null 2>&1
 check "re-install does not duplicate hooks" '[ "$(grep -c pm-hook.sh .claude/settings.json)" = 4 ] && [ "$(grep -c pm-hook.sh .codex/hooks.json)" = 4 ]'
 check "existing settings and hooks kept" 'valid_json "$(cat .claude/settings.json)" && grep -q "echo mine" .claude/settings.json && grep -q "Bash(ls)" .claude/settings.json'
-check "re-install does not duplicate bootstrap" '[ "$(grep -c project-memory:start AGENTS.md)" = 1 ]'
+check "re-install does not duplicate bootstrap" '[ "$(grep -c team-memory:start AGENTS.md)" = 1 ]'
 check "pre-commit secret check installed" 'grep -q "mem.sh secrets --staged" "$(git rev-parse --git-path hooks)/pre-commit"'
 
 # seed memory
@@ -100,14 +100,14 @@ check "codex: #hold denies with instructions" 'printf "%s" "$o" | grep -q "\"per
 check "codex: never returns unsupported ask" '! printf "%s" "$o" | grep -q "\"ask\""' "$o"
 o="$(H pre-edit codex "$(J e3 ',"tool_name":"apply_patch","tool_input":{"command":"*** Update File: src/app.js\n@@\n*** Update File: src/api/client.js\n"}')")"
 check "codex: multi-file patch into #hold denies" 'printf "%s" "$o" | grep -q "\"permissionDecision\":\"deny\""' "$o"
-check "mem.sh path from a subfolder" '(cd src && bash ../.agents/skills/project-memory/scripts/mem.sh path api/client.js) | grep -q "Client API frozen"'
-bash .agents/skills/project-memory/scripts/mem.sh approve src/api/ 5 >/dev/null
+check "mem.sh path from a subfolder" '(cd src && bash ../.agents/skills/team-memory/scripts/mem.sh path api/client.js) | grep -q "Client API frozen"'
+bash .agents/skills/team-memory/scripts/mem.sh approve src/api/ 5 >/dev/null
 o="$(H pre-edit codex "$(J e2 ',"tool_name":"apply_patch","tool_input":{"command":"*** Update File: src/api/client.js\n"}')")"
 check "approved #hold area no longer blocks" '! printf "%s" "$o" | grep -q permissionDecision' "$o"
 o="$(H pre-edit codex "$(J e4 ',"tool_name":"apply_patch","tool_input":{"command":"*** Update File: src/app.js\n@@\n*** Update File: src/api/client.js\n"}')")"
 check "approval covers held files in a multi-file patch" '! printf "%s" "$o" | grep -q permissionDecision' "$o"
 printf -- '- 2026-10-14 · Detail page frozen. #web @src/pages/[id]/ #hold (user)\n' >> .memory/decisions.md
-check "@path with [id] stays specific" '! bash .agents/skills/project-memory/scripts/mem.sh path src/pages/other.js | grep -q "Detail page" && bash .agents/skills/project-memory/scripts/mem.sh path "src/pages/[id]/x.js" | grep -q "Detail page"'
+check "@path with [id] stays specific" '! bash .agents/skills/team-memory/scripts/mem.sh path src/pages/other.js | grep -q "Detail page" && bash .agents/skills/team-memory/scripts/mem.sh path "src/pages/[id]/x.js" | grep -q "Detail page"'
 git checkout -q -- .memory/decisions.md
 
 echo "• before stop"
@@ -123,7 +123,7 @@ sleep 1; echo z >> src/app.js; sleep 1; echo "- progress" >> .memory/progress.md
 o="$(H stop codex "$(J st ',"stop_hook_active":false')")"; check "memory updated after change: silent" '[ "$o" = "{}" ]' "$o"
 
 echo "• write mode"
-MM=".agents/skills/project-memory/scripts/mem.sh"
+MM=".agents/skills/team-memory/scripts/mem.sh"
 o="$(bash $MM mode)"; check "default write mode is auto" 'printf "%s" "$o" | grep -q "write mode: auto"' "$o"
 bash $MM mode confirm >/dev/null
 o="$(H session-start claude "$(J cm ',"source":"startup"')")"; check "confirm mode announced at session start" 'printf "%s" "$o" | grep -q "CONFIRM mode"' "$o"
@@ -138,7 +138,7 @@ rm -f .memory/inbox.md
 grep -v 'Memory writes:' "$PM_USER_MEMORY" > u.tmp && mv u.tmp "$PM_USER_MEMORY"; git checkout -q -- .memory/index.md src/app.js
 
 echo "• lint & secrets"
-M=".agents/skills/project-memory/scripts/mem.sh"
+M=".agents/skills/team-memory/scripts/mem.sh"
 o="$(bash $M lint 2>&1)"
 check "missing @path flagged" 'printf "%s" "$o" | grep -q "@src/invoice/"' "$o"
 check "stale entry flagged" 'printf "%s" "$o" | grep -q "stale?"' "$o"
@@ -161,11 +161,11 @@ git checkout -q "$base"; printf -- '- 2026-10-16 · B. #y (user)\n' >> .memory/d
 git merge -q other -m m >/dev/null 2>&1; check "parallel additions merge without conflict" '[ -z "$(git diff --name-only --diff-filter=U)" ] && grep -q "· A\." .memory/decisions.md && grep -q "· B\." .memory/decisions.md'
 
 echo "• switches"
-o="$(cd "$P" && printf '{"prompt":"jangan x"}' | PM_HOOKS=off bash .agents/skills/project-memory/hooks/pm-hook.sh prompt)"; check "PM_HOOKS=off" '[ "$o" = "{}" ]' "$o"
-o="$(printf '{"cwd":"%s","prompt":"jangan x"}' "$TMP" | bash "$P/.agents/skills/project-memory/hooks/pm-hook.sh" prompt)"; check "outside a project: silent" '[ "$o" = "{}" ]' "$o"
+o="$(cd "$P" && printf '{"prompt":"jangan x"}' | PM_HOOKS=off bash .agents/skills/team-memory/hooks/pm-hook.sh prompt)"; check "PM_HOOKS=off" '[ "$o" = "{}" ]' "$o"
+o="$(printf '{"cwd":"%s","prompt":"jangan x"}' "$TMP" | bash "$P/.agents/skills/team-memory/hooks/pm-hook.sh" prompt)"; check "outside a project: silent" '[ "$o" = "{}" ]' "$o"
 bash "$SRC/scripts/install.sh" --remove-hooks >/dev/null 2>&1
 check "--remove-hooks cleans agent hooks" '! grep -q pm-hook.sh .claude/settings.json .codex/hooks.json'
-check "--remove-hooks cleans pre-commit" '! grep -q "project-memory" "$(git rev-parse --git-path hooks)/pre-commit" 2>/dev/null'
+check "--remove-hooks cleans pre-commit" '! grep -q "team-memory" "$(git rev-parse --git-path hooks)/pre-commit" 2>/dev/null'
 check "--remove-hooks keeps other hooks and settings" 'valid_json "$(cat .claude/settings.json)" && grep -q "echo mine" .claude/settings.json && grep -q "Bash(ls)" .claude/settings.json'
 
 echo "• scan (new project)"
@@ -248,12 +248,12 @@ printf '# Team rules\n- Run make check before pushing.\n' > AGENTS.md
 printf '# prod [![CI](ci.svg)](ci) ![Coverage](cov.svg)\n\nA production service that syncs product data between the shop and the warehouse.\n' > README.md
 printf '{"name":"prod","scripts":{"postinstall":"x","prebuild":"y","build":"tsc","zeta":"z","dev":"vite","old":"echo \\"old has been removed\\""}}\n' > package.json
 git add -A && git commit -qm init && bash "$SRC/scripts/install.sh" >/dev/null 2>&1
-check "CLAUDE.md imports an existing AGENTS.md" '[ "$(cat CLAUDE.md)" = "@AGENTS.md" ] && grep -q "Run make check" AGENTS.md && [ "$(grep -c project-memory:start AGENTS.md)" = 1 ]' "$(cat CLAUDE.md)"
+check "CLAUDE.md imports an existing AGENTS.md" '[ "$(cat CLAUDE.md)" = "@AGENTS.md" ] && grep -q "Run make check" AGENTS.md && [ "$(grep -c team-memory:start AGENTS.md)" = 1 ]' "$(cat CLAUDE.md)"
 cb="$(cat .memory/topics/codebase.md)"
 check "scan: badges dropped from the title" 'printf "%s" "$cb" | grep -q "^\*\*prod-app\*\* (prod) has"' "$(printf "%s" "$cb" | grep -m1 "^\*\*")"
 check "scan: important scripts first, lifecycle and stub scripts skipped" '[ "$(printf "%s\n" "$cb" | grep -m1 "npm run")" = "- \`npm run dev\` — vite" ] && ! printf "%s" "$cb" | grep -qE "npm run (postinstall|prebuild|old)"' "$(printf "%s\n" "$cb" | grep "npm run")"
 rm CLAUDE.md && ln -s AGENTS.md CLAUDE.md && bash "$SRC/scripts/install.sh" >/dev/null 2>&1
-check "CLAUDE.md symlink left alone" '[ -L CLAUDE.md ] && [ "$(grep -c project-memory:start AGENTS.md)" = 1 ]'
+check "CLAUDE.md symlink left alone" '[ -L CLAUDE.md ] && [ "$(grep -c team-memory:start AGENTS.md)" = 1 ]'
 cd "$S"
 
 
@@ -311,10 +311,10 @@ for dir in claude agents; do
   if [ "$dir" = claude ]; then mkdir -p .agents/skills .claude && ln -s ../.agents/skills .claude/skills
   else mkdir -p .claude/skills .agents && ln -s ../.claude/skills .agents/skills; fi
   out="$(bash "$SRC/scripts/install.sh" 2>&1)"
-  check "install with .$dir/skills as a symlink: one clean copy, no nested .git" '[ -f .agents/skills/project-memory/SKILL.md ] && [ ! -e .agents/skills/project-memory/.git ] && [ -L .$dir/skills ] && printf "%s" "$out" | grep -q "same folder"' "$out"
+  check "install with .$dir/skills as a symlink: one clean copy, no nested .git" '[ -f .agents/skills/team-memory/SKILL.md ] && [ ! -e .agents/skills/team-memory/.git ] && [ -L .$dir/skills ] && printf "%s" "$out" | grep -q "same folder"' "$out"
 done
 bash "$SRC/scripts/install.sh" >/dev/null 2>&1
-check "settings.json backup kept out of the working tree" '[ ! -e .claude/settings.json.bak ] && [ -f .git/project-memory-backup/.claude-settings.json ]' "$(ls -a .claude .git/project-memory-backup 2>&1)"
+check "settings.json backup kept out of the working tree" '[ ! -e .claude/settings.json.bak ] && [ -f .git/team-memory-backup/.claude-settings.json ]' "$(ls -a .claude .git/team-memory-backup 2>&1)"
 check "installer messages use project-relative paths" '! bash "$SRC/scripts/install.sh" 2>&1 | grep -qF "$L/"'
 
 echo "• secrets, planted instructions"
@@ -423,26 +423,40 @@ check "outside git: --remove-hooks works and leaves no .tmp" '[ "$r" = 0 ] && ! 
 o="$(inst)"; r=$?; check "outside git: re-install works" '[ "$r" = 0 ] && grep -q pm-hook .claude/settings.json' "$o"
 mkdir -p "$A/link" && cd "$A/link" && git init -q && printf '# rules\n' > CLAUDE.md && ln -s CLAUDE.md AGENTS.md
 inst >/dev/null; inst >/dev/null
-check "re-install keeps an AGENTS.md symlink" '[ -L AGENTS.md ] && [ "$(grep -c project-memory:start CLAUDE.md)" = 1 ]' "$(ls -l AGENTS.md)"
+check "re-install keeps an AGENTS.md symlink" '[ -L AGENTS.md ] && [ "$(grep -c team-memory:start CLAUDE.md)" = 1 ]' "$(ls -l AGENTS.md)"
 mkdir -p "$A/crlf" && cd "$A/crlf" && git init -q && printf '# Team\r\nRun make.\r\n' > AGENTS.md && inst >/dev/null
 sed -i.b 's/Never write secrets into memory\./OLD STALE LINE/' AGENTS.md && rm -f AGENTS.md.b && inst >/dev/null
 check "CRLF AGENTS.md: block refreshed, CRLF kept" '! grep -q "OLD STALE" AGENTS.md && [ "$(grep -c "$(printf "\r")\$" AGENTS.md)" = "$(wc -l < AGENTS.md | tr -d " ")" ]' "$(od -c AGENTS.md | tail -3)"
 mkdir -p "$A/husky/.husky/_" && cd "$A/husky" && git init -q && printf 'npx lint-staged\n' > .husky/pre-commit && git config core.hooksPath .husky/_
-o="$(inst)"; check "husky 9: secret check goes into .husky/pre-commit, before the user's command" '[ "$(sed -n 1p .husky/pre-commit)" = "# project-memory:start" ] && grep -q "npx lint-staged" .husky/pre-commit && [ ! -e .husky/_/pre-commit ]' "$o"
+o="$(inst)"; check "husky 9: secret check goes into .husky/pre-commit, before the user's command" '[ "$(sed -n 1p .husky/pre-commit)" = "# team-memory:start" ] && grep -q "npx lint-staged" .husky/pre-commit && [ ! -e .husky/_/pre-commit ]' "$o"
 mkdir -p "$A/fish" && cd "$A/fish" && git init -q && printf '#!/usr/bin/env fish\necho hi\n' > .git/hooks/pre-commit
-o="$(inst)"; check "a fish pre-commit hook is left alone" '! grep -q project-memory .git/hooks/pre-commit && printf "%s" "$o" | grep -q "not a shell script"' "$o"
+o="$(inst)"; check "a fish pre-commit hook is left alone" '! grep -q team-memory .git/hooks/pre-commit && printf "%s" "$o" | grep -q "not a shell script"' "$o"
 mkdir -p "$A/foreign/.memory" && cd "$A/foreign" && git init -q && echo '{}' > .memory/store.json && inst >/dev/null
 check "a .memory/ from another tool gets the missing template files" '[ -f .memory/index.md ] && [ -f .memory/gotchas.md ] && [ -f .memory/store.json ]'
 rm .memory/index.md; o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"; check "lint flags a missing index.md" 'printf "%s" "$o" | grep -q "index.md is missing"' "$o"
 mkdir -p "$A/rm" && cd "$A/rm" && git init -q && inst >/dev/null && inst --remove-hooks >/dev/null
 check "--remove-hooks deletes the files it emptied" '[ ! -e .claude/settings.json ] && [ ! -e .codex/hooks.json ] && [ ! -e .git/hooks/pre-commit ]' "$(ls -a .claude .codex .git/hooks 2>&1 | tr '\n' ' ')"
 mkdir -p "$A/bak/.claude" && cd "$A/bak" && git init -q && printf '{"model":"opus"}\n' > .claude/settings.json && inst >/dev/null && inst >/dev/null
-check "the first settings.json backup is kept" '! grep -q pm-hook .git/project-memory-backup/.claude-settings.json && grep -q opus .git/project-memory-backup/.claude-settings.json'
+check "the first settings.json backup is kept" '! grep -q pm-hook .git/team-memory-backup/.claude-settings.json && grep -q opus .git/team-memory-backup/.claude-settings.json'
 mkdir -p "$A/imp" && cd "$A/imp" && git init -q && printf '# Claude\nRead @AGENTS.md first.\n' > CLAUDE.md && inst >/dev/null
-check "CLAUDE.md that imports AGENTS.md inline gets no second block" '! grep -q project-memory:start CLAUDE.md'
+check "CLAUDE.md that imports AGENTS.md inline gets no second block" '! grep -q team-memory:start CLAUDE.md'
 o="$(bash "$SRC/scripts/install.sh" --version)"; check "install.sh --version" '[ "$o" = "$(sed -n "s/^  version: *//p" "$SRC/SKILL.md")" ]' "$o"
 o="$(cd "$A/imp" && bash "$SRC/scripts/mem.sh" bogus 2>&1)"; r=$?; check "mem.sh with an unknown command exits 1" '[ "$r" = 1 ] && printf "%s" "$o" | grep -q "unknown command"' "$o"
-cd "$A/imp"; o="$(inst)"; check "installer log: clean relative paths" 'printf "%s\n" "$o" | grep -qx "  + .agents/skills/project-memory"' "$(printf "%s" "$o" | head -3)"
+cd "$A/imp"; o="$(inst)"; check "installer log: clean relative paths" 'printf "%s\n" "$o" | grep -qx "  + .agents/skills/team-memory"' "$(printf "%s" "$o" | head -3)"
+
+# an install from before 4.0.0 (skill named project-memory) is migrated, not duplicated
+mkdir -p "$A/old/.agents/skills/project-memory" "$A/old/.claude/skills" "$A/old/.claude" "$A/old/.memory" && cd "$A/old" && git init -q
+printf -- '---\nname: project-memory\n---\n' > .agents/skills/project-memory/SKILL.md && ln -s ../../.agents/skills/project-memory .claude/skills/project-memory
+printf '{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"bash \\"$CLAUDE_PROJECT_DIR/.agents/skills/project-memory/hooks/pm-hook.sh\\" stop"}]}]}}\n' > .claude/settings.json
+printf '# Team\n<!-- project-memory:start -->\nold block\n<!-- project-memory:end -->\nkeep me\n' > AGENTS.md
+printf '#!/bin/sh\n# project-memory:start\nold check\n# project-memory:end\necho mine\n' > .git/hooks/pre-commit
+printf 'Run: bash .agents/skills/project-memory/scripts/mem.sh lint\n' > .memory/README.md
+mkdir -p .git/project-memory-backup && echo '{"model":"opus"}' > .git/project-memory-backup/.claude-settings.json
+o="$(inst)"
+check "old project-memory install: skill folders replaced" '[ ! -e .agents/skills/project-memory ] && [ ! -L .claude/skills/project-memory ] && [ -f .agents/skills/team-memory/SKILL.md ] && [ -f .claude/skills/team-memory/SKILL.md ]' "$o"
+check "old project-memory install: hooks, blocks and README migrated" '! grep -q project-memory .claude/settings.json && [ "$(grep -c "pm-hook.sh.* stop" .claude/settings.json)" = 1 ] && grep -q opus .claude/settings.json && ! grep -q "project-memory\|old block\|old check" AGENTS.md .git/hooks/pre-commit .memory/README.md && grep -q "keep me" AGENTS.md && grep -q "echo mine" .git/hooks/pre-commit && [ "$(grep -c team-memory:start AGENTS.md)" = 1 ] && grep -q team-memory/scripts .memory/README.md && [ ! -e .git/team-memory-backup ]' "$(cat .claude/settings.json AGENTS.md .git/hooks/pre-commit)"
+mkdir -p "$A/other/.agents/skills/project-memory" && cd "$A/other" && git init -q && printf -- '---\nname: something-else\n---\n' > .agents/skills/project-memory/SKILL.md && inst >/dev/null
+check "a foreign skill folder named project-memory is left alone" '[ -f .agents/skills/project-memory/SKILL.md ]'
 
 echo "• audit fixes: robustness"
 B="$A/rob proj"; mkdir -p "$B/src/a/b" && cd "$B" && git init -q && git config user.email t@t && git config user.name t && inst >/dev/null
@@ -518,5 +532,5 @@ check "scan: activity leaves out the commit without a parent" 'printf "%s" "$cb"
 cd "$S"
 
 echo; echo "passed: $pass   failed: $fail"
-rm -rf "$TMP" "${TMPDIR:-/tmp}/project-memory-$(id -u 2>/dev/null || echo u)/$RUN-"*
+rm -rf "$TMP" "${TMPDIR:-/tmp}/team-memory-$(id -u 2>/dev/null || echo u)/$RUN-"*
 [ "$fail" -eq 0 ]

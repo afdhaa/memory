@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# project-memory repo scan — run through `mem.sh scan`, which passes the project root and SECRET_RE.
+# team-memory repo scan — run through `mem.sh scan`, which passes the project root and SECRET_RE.
 #   bash scan.sh <root> [--print]
 # Writes the generated block of .memory/topics/codebase.md (text outside the block is kept; a missing
 # "How it fits together" section is added empty for the agent to write), adds it to
@@ -239,7 +239,7 @@ TEST_DIRS="$(printf '%s\n' "$TESTS" | awk -F/ 'NF { k = (NF > 1) ? $1 "/" : "(ro
 DOCS="$(printf '%s\n' "$FILES" | grep -iE '^(readme(\.(md|rst|txt))?|[^/]+\.(md|mdx|rst))$' | grep -viE '^(license|licence|code_of_conduct|changelog|release-notes|history|cla|dco|security|support|governance|maintainers)[._-]' |
   while IFS= read -r f; do
     case "$f" in (AGENTS.md|CLAUDE.md|GEMINI.md) [ -L "$f" ] && continue ;; esac   # CLAUDE.md -> AGENTS.md: listed once; also skip AGENTS.md / CLAUDE.md that hold nothing but our own bootstrap block
-    awk '/<!-- project-memory:start -->/ { b = 1; next } /<!-- project-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ && !/^[[:space:]]*@\.?\/?AGENTS\.md[[:space:]]*$/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
+    awk '/<!-- (team|project)-memory:start -->/ { b = 1; next } /<!-- (team|project)-memory:end -->/ { b = 0; next } !b && /[^[:space:]]/ && !/^[[:space:]]*@\.?\/?AGENTS\.md[[:space:]]*$/ { o = 1 } END { exit !o }' "$f" 2>/dev/null && printf '%s\n' "$f"
   done | awk '{ l = tolower($0); k = (l ~ /^readme(\.[a-z]+)?$/) ? 0 : (l ~ /^readme[-_.]/ ? 2 : 1); print k "\t" $0 }' | sort -t"$TAB" -k1,1n -k2,2 |
   awk -F'\t' '$1 == 2 { tr[++t] = $2; next } { print "`" $2 "`" }   # README-de.md, README.zh-CN.md…: one entry
     END { if (t > 2) print "`README-*` (" t " translations)"; else for (i = 1; i <= t; i++) print "`" tr[i] "`" }' | head -n 8 | join ', ')"

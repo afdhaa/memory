@@ -1,7 +1,7 @@
 # .memory — project memory
 
 This folder is the long-term memory of this project, shared by the team and by every coding agent
-(Claude Code, Codex, OpenCode, Antigravity, omp). It is maintained by the `project-memory` skill
+(Claude Code, Codex, OpenCode, Antigravity, omp). It is maintained by the `team-memory` skill
 and is plain Markdown: read it, review it in pull requests, and edit it like any other file.
 
 | File | What it holds | Who writes it |
@@ -38,7 +38,7 @@ and is plain Markdown: read it, review it in pull requests, and edit it like any
 
 ## Useful commands
 
-    bash .agents/skills/project-memory/scripts/mem.sh search <words>   # find entries
-    bash .agents/skills/project-memory/scripts/mem.sh review           # unconfirmed agent entries to check
-    bash .agents/skills/project-memory/scripts/mem.sh lint             # check size, secrets, stale entries, filler wording
-    bash .agents/skills/project-memory/scripts/mem.sh scan             # refresh the generated facts in topics/codebase.md
+    bash .agents/skills/team-memory/scripts/mem.sh search <words>   # find entries
+    bash .agents/skills/team-memory/scripts/mem.sh review           # unconfirmed agent entries to check
+    bash .agents/skills/team-memory/scripts/mem.sh lint             # check size, secrets, stale entries, filler wording
+    bash .agents/skills/team-memory/scripts/mem.sh scan             # refresh the generated facts in topics/codebase.md

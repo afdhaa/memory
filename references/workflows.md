@@ -1,7 +1,7 @@
 # Workflows — read the section you need
 
 SKILL.md has the everyday loop. This file holds the less frequent workflows. Paths to scripts are
-relative to the skill folder (`.agents/skills/project-memory/`).
+relative to the skill folder (`.agents/skills/team-memory/`).
 
 ## New project, or a re-scan
 

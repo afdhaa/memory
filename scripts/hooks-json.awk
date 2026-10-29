@@ -1,4 +1,4 @@
-# hooks-json.awk — add/remove project-memory hook entries in a Claude Code or Codex hooks JSON file.
+# hooks-json.awk — add/remove team-memory hook entries in a Claude Code or Codex hooks JSON file.
 # Pure awk (BWK/macOS, gawk, mawk); no python, node or jq.
 #   awk -v action=add|remove -v mark=<text in our hook commands> -f json.awk -f hooks-json.awk <target.json|/dev/null> <snippet.json>
 # Prints the updated JSON (2-space indent) on stdout. Exits 2 without output if a file is not valid JSON.

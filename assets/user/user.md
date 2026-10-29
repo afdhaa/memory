@@ -1,6 +1,6 @@
 # User memory
 
-> Personal preferences that apply to EVERY project (injected at session start by project-memory hooks).
+> Personal preferences that apply to EVERY project (injected at session start by team-memory hooks).
 > Keep it short (≤ ~40 lines), one clear sentence per preference. Project-specific knowledge belongs in that project's .memory/.
 > Never put secrets here.
 

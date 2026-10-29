@@ -3,6 +3,18 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 4.0.0
+The skill is renamed from `project-memory` to `team-memory`, the same name as the npm package and
+the repository. Nothing in `.memory/` changes.
+- New paths: `.agents/skills/team-memory/` (and `.claude/skills/team-memory`), hook messages start
+  with `[team-memory]`, backups go to `.git/team-memory-backup/`.
+- Upgrading: run `npx team-memory@latest` in the project. The installer removes the old
+  `project-memory` skill folders (only when their SKILL.md says `name: project-memory`), replaces the
+  old hooks, AGENTS.md/CLAUDE.md block and pre-commit block instead of adding a second copy, and
+  updates the paths in `.memory/README.md`. `--global` removes the old global copies.
+- skills.sh users: `npx skills remove project-memory`, then `npx skills add afdhaa/team-memory`.
+- Unchanged: `PM_*` environment variables and the script names (`pm-hook.sh`, `mem.sh`).
+
 ## 3.15.0
 From a 20-session test: one project, each session a fresh agent that knew only `.memory/`. Memory
 grew from 169 to 227 lines, lint stayed clean, no duplicates, and every knowledge check (14
