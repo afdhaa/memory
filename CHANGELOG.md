@@ -3,6 +3,15 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 4.1.0
+- New `mem.sh doctor` (also `npx team-memory doctor`): checks the install in a project and says
+  how to fix each problem: skill copies and their versions, global copies, Claude Code and Codex
+  hooks, the AGENTS.md/CLAUDE.md block, the pre-commit secret check, gitignored personal files,
+  `merge=union`, and leftovers of the old name `project-memory`. Read-only; exits 1 when something
+  is broken.
+- CI and the publish workflow use `actions/checkout@v7` and `actions/setup-node@v7` (Node 24), and
+  fail early when the package name in `package.json` is not `team-memory`.
+
 ## 4.0.0
 The skill is renamed from `project-memory` to `team-memory`, the same name as the npm package and
 the repository. Nothing in `.memory/` changes.

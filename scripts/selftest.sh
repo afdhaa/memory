@@ -458,6 +458,17 @@ check "old project-memory install: hooks, blocks and README migrated" '! grep -q
 mkdir -p "$A/other/.agents/skills/project-memory" && cd "$A/other" && git init -q && printf -- '---\nname: something-else\n---\n' > .agents/skills/project-memory/SKILL.md && inst >/dev/null
 check "a foreign skill folder named project-memory is left alone" '[ -f .agents/skills/project-memory/SKILL.md ]'
 
+mkdir -p "$A/doc" && cd "$A/doc" && git init -q && inst >/dev/null
+o="$(HOME="$A/home" bash .agents/skills/team-memory/scripts/mem.sh doctor 2>&1)"; r=$?
+check "doctor: a fresh install is all good" '[ "$r" = 0 ] && printf "%s" "$o" | grep -q "all good"' "$o"
+mkdir -p .agents/skills/project-memory && printf -- '---\nname: project-memory\n---\n' > .agents/skills/project-memory/SKILL.md
+grep -v progress.md .gitignore > .gi && mv .gi .gitignore && chmod -x .git/hooks/pre-commit
+o="$(HOME="$A/home" bash .agents/skills/team-memory/scripts/mem.sh doctor 2>&1)"; r=$?
+check "doctor: old-name leftover, tracked progress.md and a non-executable pre-commit are problems" '[ "$r" = 1 ] && printf "%s" "$o" | grep -q "✗ .agents/skills/project-memory" && printf "%s" "$o" | grep -q "not gitignored: .memory/progress.md" && printf "%s" "$o" | grep -q "not executable"' "$o"
+mkdir -p "$A/doc2" && cd "$A/doc2" && git init -q
+o="$(HOME="$A/home" bash "$SRC/scripts/mem.sh" doctor 2>&1)"; r=$?
+check "doctor: works before anything is installed" '[ "$r" = 0 ] && printf "%s" "$o" | grep -q "not installed in this project" && ! printf "%s" "$o" | grep -q "agent hooks"' "$o"
+
 echo "• audit fixes: robustness"
 B="$A/rob proj"; mkdir -p "$B/src/a/b" && cd "$B" && git init -q && git config user.email t@t && git config user.name t && inst >/dev/null
 touch src/app.js src/x.ts src/a/b/c.ts

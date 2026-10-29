@@ -8,6 +8,7 @@
 #   mem.sh mode [auto|confirm] [--global]  show or set the write mode (confirm = propose entries, write after a yes)
 #   mem.sh changelog            where finished, user-visible work is recorded in this project (changelog file, fragments or generated)
 #   mem.sh stats                entry counts per file + injection hits
+#   mem.sh doctor               check the install: skill copies, hooks, AGENTS.md block, pre-commit, gitignore, old-name leftovers
 #   mem.sh approve <path> [min]  allow edits in a #hold area for N minutes (default 60) — only after the user approves
 #   mem.sh scan [--print]       index the repo into .memory/topics/codebase.md (+ Map, empty Key facts);
 #                               in a project without .memory/, creates it here from the templates first
@@ -20,6 +21,7 @@ while [ "$ROOT" != "/" ] && [ ! -d "$ROOT/.memory" ]; do ROOT="$(dirname "$ROOT"
 if [ ! -d "$ROOT/.memory" ]; then
   case "${1:-}" in
     secrets) exit 0 ;;   # nothing to scan (e.g. pre-commit after .memory/ was removed)
+    doctor) ROOT="$ORIG" ;;   # also useful before .memory/ exists
     scan) ROOT="$ORIG"
       if [ "$ROOT" = "/" ] || [ "$(cd "$ROOT" && pwd -P)" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; then
         echo "Refusing to create .memory/ in $ROOT — run mem.sh scan from the project root." >&2; exit 1
@@ -325,6 +327,9 @@ approve)
   printf '%s\t%s\n' "$(( $(date +%s) + mins * 60 ))" "$p" >> .memory/.approvals
   echo "✓ #hold lifted for '$p' for $mins minutes (this machine only)"
   ;;
+doctor)
+  bash "$HERE/doctor.sh" "$ROOT"
+  ;;
 scan)
   SECRET_RE="$SECRET_RE" bash "$HERE/scan.sh" "$ROOT" "${1:-}"
   ;;
@@ -335,6 +340,6 @@ stats)
   [ -f "$USER_MEM" ] && echo "user memory: $USER_MEM ($(wc -l < "$USER_MEM" | tr -d ' ') lines)"
   exit 0
   ;;
-help|-h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' ;;
-*) echo "unknown command: $cmd" >&2; sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 1 ;;
+help|-h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+*) echo "unknown command: $cmd" >&2; sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 1 ;;
 esac

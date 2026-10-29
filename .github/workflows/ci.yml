@@ -33,7 +33,7 @@ jobs:
             os: macos-latest
             awk: /usr/bin/awk
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Use the shell and awk under test
         run: |

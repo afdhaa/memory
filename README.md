@@ -161,6 +161,7 @@ From the project root:
     bash $M changelog                # how this project records changes for its users
     bash $M approve src/api/ 30      # allow edits in a frozen area for 30 minutes
     bash $M stats                    # entries per file and how often hooks used them
+    bash $M doctor                   # check the install: hooks, AGENTS.md block, pre-commit, gitignore
 
 **The scan** reads file names, manifests and git history — never the values in `.env` files — and
 writes the generated part of `topics/codebase.md`: languages, frameworks and versions, commands,
@@ -224,6 +225,7 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
 ## Update and uninstall
 
     npx team-memory@latest            # in the project: refreshes the skill; .memory/ is untouched
+    npx team-memory doctor            # check that hooks, instructions and the pre-commit check are in place
 
 To uninstall from a project:
 
@@ -239,7 +241,7 @@ preferences are in `~/.agents/memory/user.md`.
 **Upgrading from 3.x:** before 4.0.0 the skill was named `project-memory`. Run `npx team-memory@latest`
 in the project once: it removes `.agents/skills/project-memory` and `.claude/skills/project-memory`,
 moves the hooks, the AGENTS.md/CLAUDE.md block and the pre-commit check to the new name, and updates
-the paths in `.memory/README.md`. Commit the result so teammates get it. `--global` does the same for
+the paths in `.memory/README.md`; `npx team-memory doctor` then confirms nothing is left. Commit the result so teammates get it. `--global` does the same for
 the global copies. Installed from skills.sh? Run `npx skills remove project-memory`, then
 `npx skills add afdhaa/team-memory`.
 
