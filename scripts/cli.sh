@@ -3,6 +3,7 @@
 #   npx team-memory                 install into the current project (same as scripts/install.sh)
 #   npx team-memory --no-hooks      … without agent hooks
 #   npx team-memory --here          install in a subfolder of a git repository (one package of a monorepo)
+#   npx team-memory --with=gemini,cursor,copilot   also add these agents' hooks (or --with=all)
 #   npx team-memory --global        skill for every project + user memory
 #   npx team-memory --remove-hooks  remove the agent hooks and the pre-commit block
 #   npx team-memory doctor          check this project's install (hooks, AGENTS.md, pre-commit, old-name leftovers)
@@ -22,6 +23,6 @@ case "${1:-}" in
   doctor) exec bash "$HERE/mem.sh" doctor ;;
   selftest) shift; exec bash "$HERE/selftest.sh" "$@" ;;
   -v|--version) sed -n 's/^  version: *//p' "$HERE/../SKILL.md" | head -n1 ;;
-  -h|--help|help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+  -h|--help|help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) exec bash "$HERE/install.sh" "$@" ;;
 esac

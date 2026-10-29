@@ -469,6 +469,50 @@ mkdir -p "$A/doc2" && cd "$A/doc2" && git init -q
 o="$(HOME="$A/home" bash "$SRC/scripts/mem.sh" doctor 2>&1)"; r=$?
 check "doctor: works before anything is installed" '[ "$r" = 0 ] && printf "%s" "$o" | grep -q "not installed in this project" && ! printf "%s" "$o" | grep -q "agent hooks"' "$o"
 
+# Claude Code plugin: hooks/hooks.json runs the same hook with "plugin"
+o="$(awk -v action=add -v mark=x -f "$SRC/scripts/json.awk" -f "$SRC/scripts/hooks-json.awk" /dev/null "$SRC/hooks/hooks.json" 2>&1)"
+check "plugin hooks.json is valid and has the four events" 'for e in SessionStart UserPromptSubmit PreToolUse Stop; do printf "%s" "$o" | grep -q "\"$e\"" || exit 1; done' "$o"
+if [ -f "$SRC/.claude-plugin/plugin.json" ]; then   # (not in the npm package)
+  v="$(sed -n 's/^  version: *//p' "$SRC/SKILL.md" | head -n1)"
+  check "plugin.json, marketplace.json and package.json carry the SKILL.md version" 'for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json package.json; do grep -q "\"version\": \"$v\"" "$SRC/$f" || exit 1; done'
+fi
+o="$(cd "$A/doc" && printf '{"session_id":"'"$RUN"'-plug1"}' | bash "$SRC/hooks/pm-hook.sh" session-start claude plugin)"
+check "plugin hooks stay silent where the installer's hooks run" '[ "$o" = "{}" ]' "$o"
+mkdir -p "$A/plug/.memory" && cp "$SRC/assets/templates/index.md" "$A/plug/.memory/" && cd "$A/plug"
+o="$(printf '{"session_id":"'"$RUN"'-plug2"}' | bash "$SRC/hooks/pm-hook.sh" session-start claude plugin)"
+check "plugin in a project without the installer: memory loaded, mem.sh path points at the plugin" 'printf "%s" "$o" | grep -q "team-memory loaded" && printf "%s" "$o" | grep -qF "$SRC/scripts/mem.sh"' "$(printf "%s" "$o" | head -c 400)"
+
+echo "• Gemini CLI, Cursor, GitHub Copilot"
+mkdir -p "$A/ag" && cd "$A/ag" && git init -q && inst --with=all >/dev/null && inst --with=all >/dev/null
+check "--with=all: Gemini, Cursor and Copilot hook files, no duplicates on re-install" '[ "$(grep -c pm-hook.sh .gemini/settings.json)" = 5 ] && [ "$(grep -c pm-hook.sh .cursor/hooks.json)" = 5 ] && [ "$(grep -c pm-hook.sh .github/hooks/team-memory.json)" = 4 ] && grep -q "\"version\": 1" .cursor/hooks.json && [ "$(cat GEMINI.md)" = "@./AGENTS.md" ]' "$(ls -a .gemini .cursor .github/hooks 2>&1)"
+printf -- '- 2026-10-01 · Keep the payment webhook as is. #payment @src/pay.js #hold (user)\n- 2026-10-01 · Prices are in cents. @src/price.js (user)\n' >> .memory/decisions.md
+AH=.agents/skills/team-memory/hooks/pm-hook.sh
+o="$(printf '{"session_id":"'"$RUN"'-g1","cwd":"%s","tool_name":"replace","tool_input":{"file_path":"%s/src/pay.js"}}' "$PWD" "$PWD" | env -u CLAUDECODE bash $AH pre-edit gemini)"
+check "gemini: #hold edit denied (BeforeTool)" 'printf "%s" "$o" | grep -q "^{\"decision\":\"deny\",\"reason\":\"\[team-memory\] Blocked"' "$o"
+o="$(printf '{"session_id":"'"$RUN"'-g1","cwd":"%s","tool_name":"write_file","tool_input":{"file_path":"src/price.js"}}' "$PWD" | env -u CLAUDECODE bash $AH post-edit gemini)"
+check "gemini: tagged entries after the edit (AfterTool)" 'printf "%s" "$o" | grep -q "\"hookEventName\":\"AfterTool\"" && printf "%s" "$o" | grep -q "in cents"' "$o"
+o="$(printf '{"session_id":"'"$RUN"'-g1","cwd":"%s","tool_name":"write_file","tool_input":{"file_path":"src/price.js"}}' "$PWD" | env -u CLAUDECODE bash $AH pre-edit gemini)"
+check "gemini: no context before an edit without #hold" '[ "$o" = "{}" ]' "$o"
+o="$(printf '{"conversation_id":"'"$RUN"'-c1","prompt":"from now on never use axios here","cursor_version":"1.7"}' | env -u CLAUDECODE bash $AH prompt cursor)"
+check "cursor: prompt captured, prompt allowed" '[ "$o" = "{\"continue\":true}" ] && grep -q "never use axios" .memory/inbox.md' "$o"
+o="$(printf '{"conversation_id":"'"$RUN"'-c1","workspace_roots":["%s"],"cursor_version":"1.7"}' "$PWD" | env -u CLAUDECODE bash $AH session-start cursor)"
+check "cursor: memory at session start (additional_context)" 'printf "%s" "$o" | grep -q "^{\"additional_context\":\"\[team-memory\]"' "$(printf "%s" "$o" | head -c 200)"
+touch -t 202001010000 .memory/*.md; sleep 1; echo x > src.txt   # (bash 3.2 compares whole seconds)
+o="$(printf '{"conversation_id":"'"$RUN"'-c1","status":"completed","loop_count":0}' | env -u CLAUDECODE bash $AH stop cursor)"
+o2="$(printf '{"conversation_id":"'"$RUN"'-c1","status":"completed","loop_count":1}' | env -u CLAUDECODE bash $AH stop cursor)"
+check "cursor: stop reminder as followup_message, not after its own follow-up" 'printf "%s" "$o" | grep -q "^{\"followup_message\":" && [ "$o2" = "{}" ]' "$o | $o2"
+o="$(printf '{"sessionId":"'"$RUN"'-k1","cwd":"%s","toolName":"edit","toolArgs":"{\\"path\\":\\"src/pay.js\\"}"}' "$PWD" | env -u CLAUDECODE bash $AH pre-edit copilot)"
+check "copilot: #hold edit denied, path read from toolArgs" 'printf "%s" "$o" | grep -q "^{\"permissionDecision\":\"deny\""' "$o"
+o="$(printf '{"session_id":"'"$RUN"'-z","cwd":"%s"}' "$PWD" | env -u CLAUDECODE CURSOR_VERSION=1.7 bash $AH session-start claude)"
+o2="$(printf '{"session_id":"'"$RUN"'-z","cwd":"%s"}' "$PWD" | env -u CLAUDECODE COPILOT_CLI=1 bash $AH session-start claude)"
+o3="$(printf '{"session_id":"'"$RUN"'-z","cwd":"%s"}' "$PWD" | CLAUDECODE=1 COPILOT_CLI=1 bash $AH session-start claude)"
+check "the .claude/settings.json copy stays silent in Cursor and Copilot, runs in Claude Code" '[ "$o" = "{}" ] && [ "$o2" = "{}" ] && printf "%s" "$o3" | grep -q "team-memory loaded"' "$o | $o2"
+mkdir -p "$A/ag2/.cursor" && cd "$A/ag2" && git init -q && printf '{"version":1,"hooks":{"stop":[{"command":"./mine.sh"}]}}\n' > .cursor/hooks.json && o="$(inst)"
+check "a project that uses Cursor gets Cursor hooks only; its own hooks kept" '[ "$(grep -c pm-hook.sh .cursor/hooks.json)" = 5 ] && grep -q mine.sh .cursor/hooks.json && [ ! -e .gemini ] && [ ! -e .github ] && [ ! -e GEMINI.md ]' "$o"
+inst --remove-hooks >/dev/null; cd "$A/ag" && inst --remove-hooks >/dev/null
+check "--remove-hooks: other agents' hooks removed, the user's kept" '! grep -q pm-hook "$A/ag2/.cursor/hooks.json" && grep -q mine.sh "$A/ag2/.cursor/hooks.json" && [ ! -e .github/hooks/team-memory.json ] && [ ! -e .cursor/hooks.json ] && ! grep -qs pm-hook .gemini/settings.json' "$(cat "$A/ag2/.cursor/hooks.json")"
+o="$(inst --with=emacs)"; r=$?; check "--with rejects an unknown agent" '[ "$r" = 1 ] && printf "%s" "$o" | grep -q "unknown agent"' "$o"
+
 echo "• audit fixes: robustness"
 B="$A/rob proj"; mkdir -p "$B/src/a/b" && cd "$B" && git init -q && git config user.email t@t && git config user.name t && inst >/dev/null
 touch src/app.js src/x.ts src/a/b/c.ts

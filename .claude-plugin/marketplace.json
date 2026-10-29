@@ -1,0 +1,15 @@
+{
+  "name": "team-memory",
+  "description": "team-memory: long-term project memory for coding agents, as plain Markdown in the repo.",
+  "owner": { "name": "afdhaa", "url": "https://github.com/afdhaa" },
+  "plugins": [
+    {
+      "name": "team-memory",
+      "source": "./",
+      "description": "Long-term memory for coding agents, kept as plain Markdown in your repo and reviewed in pull requests. Includes the skill and its hooks.",
+      "version": "4.2.0",
+      "category": "productivity",
+      "tags": ["memory", "hooks", "skills"]
+    }
+  ]
+}

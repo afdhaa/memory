@@ -3,6 +3,20 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 4.2.0
+- **Claude Code plugin.** `/plugin marketplace add afdhaa/team-memory`, then
+  `/plugin install team-memory@team-memory`: the skill and its hooks in every project, without
+  touching the project's files. In a project with its own hooks from `npx team-memory`, the
+  plugin's hooks stay silent.
+- **Gemini CLI, Cursor and GitHub Copilot hooks**, each in the agent's own format:
+  `.gemini/settings.json` (plus a `GEMINI.md` that imports AGENTS.md), `.cursor/hooks.json` and
+  `.github/hooks/team-memory.json`. The installer adds them where the project already uses the agent,
+  or with `--with=gemini,cursor,copilot` (`--with=all`); `--remove-hooks` and `doctor` cover them.
+  What each agent supports differs: see the agent table in the README. Cursor and the Copilot CLI
+  also run the hooks in `.claude/settings.json`; that copy now stays silent there, so nothing runs
+  twice.
+- Hook messages name the `mem.sh` that exists: the project copy, or the plugin's or global copy.
+
 ## 4.1.0
 - New `mem.sh doctor` (also `npx team-memory doctor`): checks the install in a project and says
   how to fix each problem: skill copies and their versions, global copies, Claude Code and Codex

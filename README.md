@@ -9,7 +9,8 @@ works, and your team reviews them in pull requests like any other file.
 
 - **Agents stop re-learning your project.** "We don't use axios here", "integration tests need the
   database container", "don't touch the legacy auth module": said once, remembered by every session.
-- **One memory for every agent:** Claude Code, Codex, OpenCode, Antigravity and Pi/omp.
+- **One memory for every agent:** Claude Code, Codex, Gemini CLI, Cursor, GitHub Copilot, OpenCode,
+  Antigravity and Pi/omp.
 - **No server, no database, no network.** The memory is Markdown, the helpers are bash and awk,
   the history is git.
 
@@ -26,6 +27,19 @@ Then open your agent in that project and say:
 The agent writes a short summary of the project and how its code fits together. From then on it
 reads memory at the start of each task and records what is worth keeping. Commit `.memory/` so your
 team and their agents share it.
+
+### As a Claude Code plugin
+
+In Claude Code:
+
+    /plugin marketplace add afdhaa/team-memory
+    /plugin install team-memory@team-memory
+
+The plugin brings the skill and its hooks to every project you open, without touching the project's
+files. In a project without `.memory/`, ask the agent to start one ("set up project memory"); it runs
+the scan. The plugin does not add the AGENTS.md block, the pre-commit secret check or `merge=union`
+for teammates: run `npx team-memory` in a project that a team shares. Where a project has its own
+hooks from `npx team-memory`, the plugin's hooks stay silent, so nothing runs twice.
 
 ### From skills.sh
 
@@ -54,6 +68,8 @@ your-project/
 ├── .agents/skills/team-memory/   # the skill (Claude Code gets a link in .claude/skills/)
 ├── AGENTS.md, CLAUDE.md          # a short instruction block; a new CLAUDE.md imports AGENTS.md
 ├── .claude/settings.json, .codex/hooks.json   # hooks for Claude Code and Codex
+├── .gemini/settings.json, GEMINI.md, .cursor/hooks.json, .github/hooks/team-memory.json
+│                                 # only for agents the project uses (or --with=…)
 └── .gitignore, .gitattributes, pre-commit     # personal files out of git, merge-friendly, secret check
 
 ~/.agents/memory/user.md          # your own preferences, for every project
@@ -63,9 +79,11 @@ your-project/
 |---|---|
 | `npx team-memory` | everything above, then a scan of the repository |
 | `npx team-memory --no-hooks` | the same, without agent hooks |
+| `npx team-memory --with=gemini,cursor,copilot` | also hooks for these agents (`--with=all`); without it they are added only where the project already uses them (`.gemini/` or `GEMINI.md`, `.cursor/`, `.github/copilot-instructions.md`) |
 | `npx team-memory --here` | install in a subfolder of a git repository (one package of a monorepo) without asking |
 | `npx team-memory --global` | the skill for every project, plus `user.md` (no `.memory/`, no hooks) |
 | `npx team-memory --remove-hooks` | removes the hooks and the pre-commit block; nothing else |
+| `npx team-memory doctor` | checks the install and says how to fix what is missing |
 | `npx team-memory selftest` | runs the test suite in a temporary repository |
 | `npx team-memory --version` | prints the version |
 
@@ -75,8 +93,8 @@ kept, and the previous `settings.json`/`hooks.json` is backed up in `.git/team-m
 
 ## How it works
 
-**During a session** (Claude Code and Codex run this through hooks; other agents follow the
-instructions in AGENTS.md and the skill):
+**During a session** (Claude Code, Codex, Gemini CLI, Cursor and Copilot run this through hooks;
+other agents follow the instructions in AGENTS.md and the skill):
 
 | When | What happens |
 |---|---|
@@ -175,6 +193,9 @@ explanation above it ("How it fits together" and "Project layout"); a re-scan ne
 |---|---|---|
 | Claude Code | `.claude/skills/` | yes, in `.claude/settings.json` |
 | Codex | `.agents/skills/` | yes, in `.codex/hooks.json` |
+| Gemini CLI | `GEMINI.md` (imports AGENTS.md) | yes, in `.gemini/settings.json`; tagged entries arrive right after an edit |
+| Cursor | AGENTS.md | yes, in `.cursor/hooks.json`; no recall with a prompt (Cursor's prompt hook cannot add context), tagged entries arrive right after an edit |
+| GitHub Copilot (CLI, cloud agent) | AGENTS.md | yes, in `.github/hooks/team-memory.json`: session start, `#hold`, reminder before stopping; no recall with a prompt or before an edit |
 | Pi / omp | `.agents/skills/`, `~/.agents/skills/` | no: the agent follows the skill itself (type `/skill:team-memory` to load it) |
 | OpenCode, Antigravity | `.agents/skills/` | no: through the block in AGENTS.md |
 

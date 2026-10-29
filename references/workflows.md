@@ -101,9 +101,11 @@ duplicates), gitignores the personal files and adds a pre-commit secret check.
 - **Session start / after compaction:** `index.md`, `progress.md`, `user.md`, plus notes about an
   inbox to triage or onboarding sections still empty.
 - **Each prompt:** the best-matching entries (keyword ranking, each shown once per session); a prompt
-  that looks like a correction is captured into `inbox.md` with a reminder to record it.
-- **Before an edit:** entries tagged for that file. A `#hold` area needs the user's approval: Claude
-  Code shows a prompt; Codex blocks the edit — ask, and only after a clear yes run
-  `mem.sh approve <path>` (60 minutes), then retry.
+  that looks like a correction is captured into `inbox.md` with a reminder to record it. Cursor and
+  Copilot capture only: their prompt hooks cannot add context.
+- **Before an edit:** entries tagged for that file (Gemini CLI and Cursor: right after the edit; Copilot:
+  none). A `#hold` area needs the user's approval: Claude Code shows a prompt; Codex, Gemini CLI,
+  Cursor and Copilot block the edit — ask, and only after a clear yes run `mem.sh approve <path>`
+  (60 minutes), then retry.
 - **Before stopping:** files changed but memory didn't → one reminder (memory, progress, changelog).
   If nothing is worth keeping, end with `memory: nothing new`.

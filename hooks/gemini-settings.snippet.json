@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "name": "team-memory", "type": "command", "command": "bash \"$GEMINI_PROJECT_DIR/.agents/skills/team-memory/hooks/pm-hook.sh\" session-start gemini", "timeout": 10000 } ] }
+    ],
+    "BeforeAgent": [
+      { "hooks": [ { "name": "team-memory", "type": "command", "command": "bash \"$GEMINI_PROJECT_DIR/.agents/skills/team-memory/hooks/pm-hook.sh\" prompt gemini", "timeout": 10000 } ] }
+    ],
+    "BeforeTool": [
+      { "matcher": "write_file|replace", "hooks": [ { "name": "team-memory", "type": "command", "command": "bash \"$GEMINI_PROJECT_DIR/.agents/skills/team-memory/hooks/pm-hook.sh\" pre-edit gemini", "timeout": 10000 } ] }
+    ],
+    "AfterTool": [
+      { "matcher": "write_file|replace", "hooks": [ { "name": "team-memory", "type": "command", "command": "bash \"$GEMINI_PROJECT_DIR/.agents/skills/team-memory/hooks/pm-hook.sh\" post-edit gemini", "timeout": 10000 } ] }
+    ],
+    "AfterAgent": [
+      { "hooks": [ { "name": "team-memory", "type": "command", "command": "bash \"$GEMINI_PROJECT_DIR/.agents/skills/team-memory/hooks/pm-hook.sh\" stop gemini", "timeout": 15000 } ] }
+    ]
+  }
+}

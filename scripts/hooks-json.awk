@@ -3,6 +3,8 @@
 #   awk -v action=add|remove -v mark=<text in our hook commands> -f json.awk -f hooks-json.awk <target.json|/dev/null> <snippet.json>
 # Prints the updated JSON (2-space indent) on stdout. Exits 2 without output if a file is not valid JSON.
 # Only hook commands containing `mark` are touched; every other key, entry and hook is kept as written.
+# Two layouts: Claude Code, Codex and Gemini nest hooks in entries ({"matcher", "hooks": [{"command"}]});
+# Cursor and Copilot list them directly ({"command"} / {"bash"}), with a top-level "version".
 
 { if (FILENAME == ARGV[1]) tgt = tgt $0 "\n"; else snp = snp $0 "\n" }
 
@@ -15,6 +17,7 @@ END {
   if (action == "add") {
     snip = parse(snp, 0); if (ERR) fail("snippet is not valid JSON: " ERR)
     sh = okey(snip, "\"hooks\"")
+    sv = okey(snip, "\"version\""); if (sv && !okey(root, "\"version\"")) oput(root, "\"version\"", sv)
     if (!hooks) { hooks = node("o"); oput(root, "\"hooks\"", hooks) }
     for (i = 1; i <= N[sh]; i++) {
       arr = okey(hooks, K[sh, i])
@@ -28,10 +31,10 @@ END {
   printf "%s\n", out(root, "")
 }
 
-# a hook object whose "command" string contains the mark (JSON may escape "/" as "\/")
+# a hook object whose "command" (Copilot: "bash") string contains the mark (JSON may escape "/" as "\/")
 function ours(h,   c, s) {
   if (T[h] != "o") return 0
-  c = okey(h, "\"command\""); if (!c || T[c] != "s") return 0
+  c = okey(h, "\"command\""); if (!c) c = okey(h, "\"bash\""); if (!c || T[c] != "s") return 0
   s = V[c]; gsub(/\\\//, "/", s)
   return index(s, mark) > 0
 }
@@ -50,7 +53,7 @@ function strip(hooks,   i, m, ev, arr, j, mm, e, hk, k, kk, gone, emptied) {
           for (k = 1; k <= N[hk]; k++) if (!ours(C[hk, k])) C[hk, ++kk] = C[hk, k]
           if (kk == 0 && N[hk] > 0) gone = 1
           N[hk] = kk
-        }
+        } else if (ours(e)) gone = 1   # Cursor / Copilot: the entry is the hook
         if (!gone) C[arr, ++mm] = e
       }
       if (mm == 0 && N[arr] > 0) emptied = 1

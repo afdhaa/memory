@@ -2,7 +2,7 @@
 name: team-memory
 description: Long-term project memory for coding agents, kept as plain Markdown in the repo (`.memory/`) and shared by the team and every agent, plus personal preferences in `~/.agents/memory/user.md`. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for its path) and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, run `mem.sh scan` first. Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "update memory", "review memory", "cek memori", "rapikan memori", "scan ulang", "freeze this area", corrects how you did something, or a message starts with "[team-memory]". Trigger whenever the repo has a `.memory/` folder.
 metadata:
-  version: 4.1.0
+  version: 4.2.0
 ---
 
 # Team Memory
@@ -36,12 +36,14 @@ inbox triage, clean-up, user commands and team use.
 
 ## Hooks
 
-In Claude Code and Codex, hooks do part of this. Messages starting with `[team-memory]` come from
-them; follow them. Session start injects `index.md`, `progress.md` and `user.md` (don't re-read
-them); each prompt injects matching entries and captures corrections into `inbox.md`; each edit
-injects entries tagged for that file and asks before touching a `#hold` area (Codex blocks it: ask
-the user, then `mem.sh approve <path>`; never approve on your own); stopping with unrecorded changes
-gets one reminder. Without hooks (other agents, `PM_HOOKS=off`), do all of it yourself.
+In Claude Code, Codex, Gemini CLI, Cursor and GitHub Copilot, hooks do part of this. Messages
+starting with `[team-memory]` come from them; follow them. Session start injects `index.md`,
+`progress.md` and `user.md` (don't re-read them); each prompt injects matching entries and captures
+corrections into `inbox.md`; each edit injects entries tagged for that file (Gemini and Cursor:
+right after the edit) and asks before touching a `#hold` area (agents other than Claude Code block
+it: ask the user, then `mem.sh approve <path>`; never approve on your own); stopping with unrecorded
+changes gets one reminder. Cursor and Copilot get no entries with a prompt: search memory yourself
+for each new request. Without hooks (other agents, `PM_HOOKS=off`), do all of it yourself.
 
 ## 1. Recall
 

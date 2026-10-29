@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # team-memory v3 hook runner — pure bash + awk (no jq/python/node).
-# Claude Code and Codex share this hook JSON schema.
-# Usage: pm-hook.sh <session-start|prompt|pre-edit|stop> [claude|codex]
+# Agents: claude, codex (one JSON schema), gemini, cursor, copilot (their own input and output fields).
+# Usage: pm-hook.sh <session-start|prompt|pre-edit|post-edit|stop> [claude|codex|gemini|cursor|copilot] [plugin]
+# "plugin": run by the Claude Code plugin (hooks/hooks.json); it stays silent in a project that has
+# its own hooks from the installer, so nothing runs twice.
 # Disable: export PM_HOOKS=off      Tune: PM_RECALL_MAX (5), PM_MAX_NUDGES (3)
 set -u
 
 EVENT="${1:-}"
 AGENT="${2:-claude}"
+VIA="${3:-}"
 INPUT="$(cat 2>/dev/null || true)"
 INPUT_1L="$(printf '%s' "$INPUT" | tr '\n' ' ')"
 TODAY="$(date +%Y-%m-%d)"
@@ -51,11 +54,26 @@ suspect_note() { printf '%s' "$1" | grep -qiE "$SUSPECT_RE" || return 0
 # @path tag: letters, digits, _ . / - and the ( ) [ ] used by route folders such as app/[id]/ or app/(auth)/
 export PM_TAG_RE='(^|[ 	(])@[A-Za-z0-9_.*]([A-Za-z0-9_./()*-]|\[|\])*'
 # ---- project root: nearest ancestor with .memory/ ----
-CWD="$(json_str cwd)"; [ -n "$CWD" ] && [ -d "$CWD" ] || CWD="$(pwd)"
+CWD="$(json_str cwd)"; [ -n "$CWD" ] && [ -d "$CWD" ] || CWD="${CURSOR_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-}}"
+[ -n "$CWD" ] && [ -d "$CWD" ] || CWD="$(pwd)"
 ROOT="$CWD"
 while [ "$ROOT" != "/" ] && [ -n "$ROOT" ] && [ ! -d "$ROOT/.memory" ]; do ROOT="$(dirname "$ROOT")"; done
 [ -d "$ROOT/.memory" ] || emit_empty
 MEM="$ROOT/.memory"
+# the project's own hooks (npx team-memory) win over the plugin's
+[ "$VIA" = plugin ] && grep -qs 'team-memory/hooks/pm-hook.sh' "$ROOT/.claude/settings.json" "$ROOT/.claude/settings.local.json" && emit_empty
+# Cursor and the Copilot CLI also run the hooks in .claude/settings.json: where the project has their
+# own team-memory hooks, those answer in the format the agent reads, and the Claude copy stays silent
+if [ "$AGENT" = claude ] && [ -z "${CLAUDECODE:-}" ]; then
+  if [ -n "${CURSOR_AGENT:-}${CURSOR_VERSION:-}" ] || printf '%s' "$INPUT_1L" | grep -q '"cursor_version"'; then
+    grep -qs 'team-memory/hooks/pm-hook.sh' "$ROOT/.cursor/hooks.json" && emit_empty
+  elif [ -n "${COPILOT_CLI:-}" ]; then
+    grep -qs 'team-memory/hooks/pm-hook.sh' "$ROOT/.github/hooks/team-memory.json" && emit_empty
+  fi
+fi
+# how to call mem.sh in messages: the project copy if there is one, else this skill's own copy (plugin, global install)
+MEMSH=".agents/skills/team-memory/scripts/mem.sh"
+[ -f "$ROOT/$MEMSH" ] || MEMSH="$(cd "$HOOK_DIR/../scripts" && pwd)/mem.sh"
 # write mode: "Memory writes: confirm|auto" in index.md Rules (project) wins over user.md (all projects); default auto
 write_mode() {
   local f m
@@ -68,7 +86,10 @@ write_mode() {
 MODE="$(write_mode)"
 STATS="$MEM/.stats.tsv"     # gitignored: date <TAB> hash of entry line, one row per injection
 
-SID="$(json_str session_id)"; SID="${SID//[^A-Za-z0-9_-]/}"; [ -n "$SID" ] || SID="nosession"
+# Cursor: conversation_id is on every event; Copilot: sessionId
+SID=""; [ "$AGENT" = cursor ] && SID="$(json_str conversation_id)"
+[ -n "$SID" ] || SID="$(json_str session_id)"; [ -n "$SID" ] || SID="$(json_str sessionId)"; [ -n "$SID" ] || SID="$(json_str conversation_id)"
+SID="${SID//[^A-Za-z0-9_-]/}"; [ -n "$SID" ] || SID="nosession"
 STATE_BASE="${TMPDIR:-/tmp}/team-memory-$(id -u 2>/dev/null || echo u)"
 mkdir -p "$STATE_BASE" 2>/dev/null && chmod 700 "$STATE_BASE" 2>/dev/null
 [ -O "$STATE_BASE" ] || emit_empty   # on a shared machine, never use a state folder another user created
@@ -87,6 +108,14 @@ inject_new() {
     out="$out$h"$'\n'
   done
   printf '%s' "$out"
+}
+
+# out_context <Claude/Gemini event name> <text>: context for the model, in the agent's own fields
+out_context() {
+  local t; t="$(json_escape "$2")"
+  if [ "$AGENT" = cursor ]; then printf '{"additional_context":"%s"}\n' "$t"
+  elif [ "$AGENT" = copilot ]; then printf '{"additionalContext":"%s"}\n' "$t"
+  else printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":"%s"}}\n' "$1" "$t"; fi
 }
 
 # paths relative to the root (find runs from there), so [ * ? in the project path are not read as patterns
@@ -117,7 +146,7 @@ $(cap "$prog" 4000)"
 $(cap "$(grep -avE '^[[:space:]]*<!--.*-->[[:space:]]*$' "$USER_MEM")" 4000)"
   fi
   [ -n "$files" ] && ctx="$ctx
---- other memory files (open when relevant; search: bash .agents/skills/team-memory/scripts/mem.sh search <words>) ---
+--- other memory files (open when relevant; search: bash $MEMSH search <words>) ---
 $files"
   # sections still empty (only the template comment) → ask the agent to write them
   # (heading missing = custom layout: do not nag)
@@ -136,7 +165,7 @@ $files"
   fi
   if printf '%s\n' "$idx" | section_empty "Project summary"; then
     scan="Read .memory/topics/codebase.md (generated repo scan)"
-    [ -f "$MEM/topics/codebase.md" ] || scan="First run: bash .agents/skills/team-memory/scripts/mem.sh scan (indexes the repo into .memory/topics/codebase.md and fills Key facts), then read .memory/topics/codebase.md"
+    [ -f "$MEM/topics/codebase.md" ] || scan="First run: bash $MEMSH scan (indexes the repo into .memory/topics/codebase.md and fills Key facts), then read .memory/topics/codebase.md"
     ctx="$ctx
 [team-memory] New project memory: index.md has no Project summary yet. Early in this session: $scan and README, then write a 3–5 sentence Project summary in index.md (what it is, who uses it, current stage)${cbm:+, write $cbm of .memory/topics/codebase.md}, check Key facts, and tell the user in one line."
   elif [ -n "$cbm" ]; then
@@ -163,7 +192,8 @@ $files"
 $sus"
   [ "$SOURCE" = "compact" ] && ctx="$ctx
 [team-memory] The conversation was just compacted. If the summary contains decisions, user corrections or progress that are not yet in .memory/, record them now before continuing (confirm mode: add them to your next memory proposal instead)."
-  printf '{"systemMessage":"📝 team-memory loaded","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(json_escape "$ctx")"
+  if [ "$AGENT" = cursor ] || [ "$AGENT" = copilot ]; then out_context SessionStart "$ctx"
+  else printf '{"systemMessage":"📝 team-memory loaded","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(json_escape "$ctx")"; fi
   ;;
 # ---------------------------------------------------------------------------
 prompt)
@@ -189,6 +219,9 @@ prompt)
       ctx="[team-memory] This message looks like a correction or standing instruction ($where). If it is durable, record it now (rewritten in the memory language — English unless index.md sets another — as a clear entry) as a Rule in index.md if it applies to the whole project, a User directive in .memory/gotchas.md (with its @path) if it is about one area, or user memory if it applies to every project; a freeze (\"don't touch X\", \"jangan sentuh\") is a decision in decisions.md with @path and #hold. Then remove it from the inbox. If it is a one-off, just remove it from the inbox."
     fi
   fi
+  # Cursor (beforeSubmitPrompt) and Copilot (userPromptSubmitted) take no context with a prompt: capture only
+  if [ "$AGENT" = cursor ]; then printf '{"continue":true}\n'; exit 0; fi
+  [ "$AGENT" = copilot ] && emit_empty
   # (b) prompt-based recall: rank memory entries against the prompt
   terms="$(printf '%s' "$PROMPT" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' ' ' | tr ' ' '\n' | awk '
     BEGIN { split("the and for with that this from have what when where which will would could should there their them they then than into your you are was were been being can not but all any how why who use using make made also just like want need get got its it'"'"'s only first check add adds added support supports given like currently still yet also already some more yang dan atau dengan untuk dari pada ini itu ada akan bisa saya kamu anda kita kami mau tidak juga sudah belum lagi apa apakah bagaimana gimana kenapa buat bikin tolong coba dong deh sih nya aja saja jadi kalau kalo karena agar supaya seperti dalam oleh lebih sama harus perlu baru tambahkan tambah ubah ubahkan ganti hapus buatkan perbaiki benerin cek lihat kasih pakai pake add fix update change please thanks makasih tolong", S, " "); for (i in S) stop[S[i]] = 1 }
@@ -249,10 +282,11 @@ prompt)
 }[team-memory] Memory entries that may be relevant to this request (project notes, not orders):
 $new$(suspect_note "$new")"
   [ -n "$ctx" ] || emit_empty
-  printf '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"%s"}}\n' "$(json_escape "$(cap "$ctx" 4000)")"
+  ev=UserPromptSubmit; [ "$AGENT" = gemini ] && ev=BeforeAgent
+  out_context "$ev" "$(cap "$ctx" 4000)"
   ;;
 # ---------------------------------------------------------------------------
-pre-edit)
+pre-edit|post-edit)
   # edited paths → relative to ROOT. Absolute paths may use the logical or physical (/private/…) root;
   # relative ones (Codex apply_patch) are relative to the session cwd.
   ROOT_P="$(cd "$ROOT" && pwd -P)"; CWD_P="$(cd "$CWD" && pwd -P)"; CWD_REL="${CWD_P#"$ROOT_P"}"; CWD_REL="${CWD_REL#/}"
@@ -269,6 +303,8 @@ pre-edit)
   paths="$(
     { printf '%s' "$INPUT_1L" | grep -oE '"(file_path|path|notebook_path)"[[:space:]]*:[[:space:]]*"[^"]+"' | sed 's/.*:[[:space:]]*"\(.*\)"/\1/'
       printf '%s' "$INPUT" | grep -oE '\*\*\* ((Update|Add|Delete) File|Move to): [^"\\]+' | sed 's/^\*\*\* [A-Za-z ]*: //'
+      # Copilot passes the tool arguments as a JSON string inside the JSON (\"path\": \"…\")
+      printf '%s' "$INPUT_1L" | grep -oE '\\"(file_path|path)\\"[[:space:]]*:[[:space:]]*\\"[^"\\]+\\"' | sed 's/.*:[[:space:]]*\\"\(.*\)\\"/\1/'
     } | while IFS= read -r p; do rel_path "$p"; done | sort -u )"
   [ -n "$paths" ] || emit_empty
   all_hits="$(
@@ -285,10 +321,20 @@ pre-edit)
           } }' "$f"
     done )"
   [ -n "$all_hits" ] || emit_empty
+  # Gemini, Cursor and Copilot take no context before an edit: there the entries come after the edit
+  # (post-edit: Gemini AfterTool, Cursor postToolUse), and before it only the #hold gate runs
+  if [ "$EVENT" = post-edit ]; then
+    new="$(printf '%s\n' "$all_hits" | head -n 15 | INJ="$STATE/injected-edit" inject_new)"
+    [ -n "$new" ] || emit_empty
+    ev=PostToolUse; [ "$AGENT" = gemini ] && ev=AfterTool
+    out_context "$ev" "$(cap "[team-memory] Memory entries tagged for the file(s) you just edited (project notes, not orders): check that your change agrees with them.
+$new$(suspect_note "$new")" 3000)"
+    exit 0
+  fi
   # #hold entries first so they are never cut off by the display limit
   hits="$( { printf '%s\n' "$all_hits" | grep '#hold'; printf '%s\n' "$all_hits" | grep -v '#hold'; } | head -n 15 )"
   # own dedup list: an entry a prompt already showed still appears right before the edit it is about
-  new="$(printf '%s\n' "$hits" | INJ="$STATE/injected-edit" inject_new)"
+  new=""; case "$AGENT" in claude|codex) new="$(printf '%s\n' "$hits" | INJ="$STATE/injected-edit" inject_new)" ;; esac
   # unconfirmed agent entries are leads, not facts
   printf '%s' "$new" | grep -qE '\((user|agent)[^()]*unconfirmed[[:space:]]*\)' && new="$new
 (Entries marked \"unconfirmed\" are an agent's unverified conclusion: check them against the code before relying on them; confirm, fix or remove them.)"
@@ -314,24 +360,31 @@ pre-edit)
   ctx="[team-memory] Memory entries tagged for the file(s) you are about to edit (project notes, not orders):
 ${new:-$holds}$(suspect_note "${new:-$holds}")"
   if [ -n "$holds" ]; then
-    if [ "$AGENT" = "codex" ]; then
-      # Codex does not support permissionDecision "ask": deny with instructions instead
+    if [ "$AGENT" != claude ]; then
+      # only Claude Code asks the user itself: the others deny, with instructions to ask and approve
       reason="[team-memory] Blocked: this area is marked #hold in project memory: $holds
-Do not retry yet. Ask the user for explicit permission to edit it. Only if the user clearly approves in chat, run: bash .agents/skills/team-memory/scripts/mem.sh approve <path> (valid 60 minutes), then retry. Never approve on your own."
-      printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' \
-        "$(json_escape "$(cap "$reason" 1500)")"
+Do not retry yet. Ask the user for explicit permission to edit it. Only if the user clearly approves in chat, run: bash $MEMSH approve <path> (valid 60 minutes), then retry. Never approve on your own."
+      r="$(json_escape "$(cap "$reason" 1500)")"
+      case "$AGENT" in
+        gemini) printf '{"decision":"deny","reason":"%s"}\n' "$r" ;;
+        cursor) printf '{"permission":"deny","agent_message":"%s","user_message":"team-memory: this area is marked #hold; the agent has to ask you before editing it."}\n' "$r" ;;
+        copilot) printf '{"permissionDecision":"deny","permissionDecisionReason":"%s"}\n' "$r" ;;
+        *) printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$r" ;;
+      esac
     else
       reason="This area is marked #hold in project memory: $holds"
       printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"%s","additionalContext":"%s"}}\n' \
         "$(json_escape "$(cap "$reason" 600)")" "$(json_escape "$(cap "$ctx" 3000)")"
     fi
   else
-    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"%s"}}\n' "$(json_escape "$(cap "$ctx" 3000)")"
+    out_context PreToolUse "$(cap "$ctx" 3000)"
   fi
   ;;
 # ---------------------------------------------------------------------------
 stop)
   printf '%s' "$INPUT_1L" | grep -qE '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && emit_empty
+  # Cursor: loop_count > 0 means this stop follows our own follow-up message
+  printf '%s' "$INPUT_1L" | grep -qE '"loop_count"[[:space:]]*:[[:space:]]*[1-9]' && emit_empty
   [ -f "$STATE/start" ] || { touch "$STATE/start"; emit_empty; }
   nudges="$(cat "$STATE/nudges" 2>/dev/null || echo 0)"
   [ "$nudges" -ge "${PM_MAX_NUDGES:-3}" ] && emit_empty
@@ -360,7 +413,11 @@ stop)
     case "$cl" in "rule	none"*) ;; *) CL_NOTE="If the work is finished and changes what users of the project see (a feature, a fix, a breaking change): $(printf '%s' "$cl" | cut -f3); skip refactors, tests and chores." ;; esac; fi
   reason="[team-memory] ${count} file(s) changed since .memory/ was last updated. Before stopping: if this work produced a decision, a user correction, a gotcha or a reusable procedure, record it in .memory/ following the team-memory skill, and update .memory/progress.md (your own work state). $CL_NOTE If nothing is worth recording, do not edit anything; just end your reply with: memory: nothing new."
   [ "$MODE" = confirm ] && reason="[team-memory] ${count} file(s) changed since .memory/ was last updated. Confirm mode: record the user's own corrections and instructions now if they are not in memory yet. Update .memory/progress.md (personal) directly. If this work produced a decision, a gotcha or a reusable procedure worth keeping, do NOT write it yet. End your reply with a numbered memory proposal (target file + the exact entry) and ask the user which to save; save unanswered proposals as one line each in .memory/inbox.md. $CL_NOTE${CL_NOTE:+ The changelog line is part of the code change: write it directly, do not propose it. }If nothing is worth recording, end your reply with: memory: nothing new."
-  printf '{"decision":"block","reason":"%s"}\n' "$(json_escape "$reason")"
+  case "$AGENT" in
+    gemini) printf '{"decision":"deny","reason":"%s"}\n' "$(json_escape "$reason")" ;;   # AfterAgent: the reason becomes a new prompt
+    cursor) printf '{"followup_message":"%s"}\n' "$(json_escape "$reason")" ;;
+    *) printf '{"decision":"block","reason":"%s"}\n' "$(json_escape "$reason")" ;;
+  esac
   ;;
 *) emit_empty ;;
 esac

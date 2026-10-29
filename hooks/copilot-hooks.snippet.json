@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [ { "type": "command", "bash": "bash .agents/skills/team-memory/hooks/pm-hook.sh session-start copilot", "cwd": ".", "timeoutSec": 10 } ],
+    "userPromptSubmitted": [ { "type": "command", "bash": "bash .agents/skills/team-memory/hooks/pm-hook.sh prompt copilot", "cwd": ".", "timeoutSec": 10 } ],
+    "preToolUse": [ { "type": "command", "matcher": "edit|create|apply_patch|str_replace_editor", "bash": "bash .agents/skills/team-memory/hooks/pm-hook.sh pre-edit copilot", "cwd": ".", "timeoutSec": 10 } ],
+    "agentStop": [ { "type": "command", "bash": "bash .agents/skills/team-memory/hooks/pm-hook.sh stop copilot", "cwd": ".", "timeoutSec": 15 } ]
+  }
+}

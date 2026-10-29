@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [ { "command": "bash .agents/skills/team-memory/hooks/pm-hook.sh session-start cursor", "timeout": 10 } ],
+    "beforeSubmitPrompt": [ { "command": "bash .agents/skills/team-memory/hooks/pm-hook.sh prompt cursor", "timeout": 10 } ],
+    "preToolUse": [ { "matcher": "Write", "command": "bash .agents/skills/team-memory/hooks/pm-hook.sh pre-edit cursor", "timeout": 10 } ],
+    "postToolUse": [ { "matcher": "Write", "command": "bash .agents/skills/team-memory/hooks/pm-hook.sh post-edit cursor", "timeout": 10 } ],
+    "stop": [ { "command": "bash .agents/skills/team-memory/hooks/pm-hook.sh stop cursor", "timeout": 15 } ]
+  }
+}

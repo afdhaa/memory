@@ -6,6 +6,7 @@
 #   bash /path/to/team-memory/scripts/install.sh --remove-hooks   # agent hooks + git pre-commit block
 #   bash /path/to/team-memory/scripts/install.sh --global      # skill for every project (no hooks)
 #   bash /path/to/team-memory/scripts/install.sh --here        # in a subfolder of a git repo (monorepo package), without asking
+#   bash /path/to/team-memory/scripts/install.sh --with=gemini,cursor,copilot   # also these agents' hooks (or --with=all)
 #
 # Skill locations (Agent Skills / SKILL.md standard):
 #   Claude Code  : .claude/skills/   ~/.claude/skills/
@@ -13,17 +14,22 @@
 #   OpenCode     : .agents/skills/   ~/.config/opencode/skills/
 #   Antigravity  : .agents/skills/   ~/.gemini/antigravity/skills/
 #   Pi / omp     : .agents/skills/ (omp also reads .claude/skills)
-# Hooks: Claude Code -> .claude/settings.json, Codex -> .codex/hooks.json (project level).
+# Hooks: Claude Code -> .claude/settings.json, Codex -> .codex/hooks.json (project level). Gemini CLI ->
+#   .gemini/settings.json, Cursor -> .cursor/hooks.json, Copilot -> .github/hooks/team-memory.json: added when
+#   the project already uses that agent (.gemini/ or GEMINI.md, .cursor/, .github/copilot-instructions.md) or with --with.
 set -euo pipefail
 
 NAME="team-memory"
 OLD_NAME="project-memory"   # the skill's name before 4.0.0; its installs are migrated
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODE="project"; HOOKS="yes"; HERE_OK=""
+MODE="project"; HOOKS="yes"; HERE_OK=""; WITH=""
 VERSION="$(sed -n 's/^  version: *//p' "$SRC/SKILL.md" 2>/dev/null | head -n1)"
 for a in "$@"; do case "$a" in
   --global) MODE="global" ;; --no-hooks) HOOKS="no" ;; --remove-hooks) MODE="remove-hooks" ;; --here) HERE_OK=1 ;;
-  -h|--help) sed -n '2,16p' "$0"; exit 0 ;; -v|-V|--version) echo "$VERSION"; exit 0 ;;
+  --with=*) WITH="${a#--with=}"
+    for w in $(printf '%s' "$WITH" | tr ',' ' '); do case "$w" in gemini|cursor|copilot|all) ;;
+      *) echo "unknown agent in --with: $w (gemini, cursor, copilot or all)" >&2; exit 1 ;; esac; done ;;
+  -h|--help) sed -n '2,19p' "$0"; exit 0 ;; -v|-V|--version) echo "$VERSION"; exit 0 ;;
   *) echo "unknown option: $a (see --help)" >&2; exit 1 ;; esac; done
 
 log() { local m="$*" p="${ROOT:-}/"; [ -n "${ROOT:-}" ] && m="${m//"$p"/}"; printf '  %s\n' "$m"; }   # paths inside the project are shown relative
@@ -78,7 +84,7 @@ merge_hooks() {
     fi
     mv "$target.tmp" "$target"
     if [ "$action" = add ]; then log "+ $target (team-memory hooks installed)"; else log "- $target (team-memory hooks removed)"
-      if [ -z "$(tr -d '{}[:space:]' < "$target")" ]; then rm -f "$target"; rmdir "$(dirname "$target")" 2>/dev/null || true; log "- $target (empty, deleted)"; fi; fi
+      if [ -z "$(tr -d '{}[:space:]' < "$target" | sed 's/^"version":1$//')" ]; then rm -f "$target"; rmdir "$(dirname "$target")" 2>/dev/null || true; log "- $target (empty, deleted)"; fi; fi
   else
     rm -f "$target.tmp"
     log "! $target: ${err:-awk failed}; hooks NOT changed. Merge $snippet manually."
@@ -187,12 +193,27 @@ strip_precommit() {
   awk -v s="$PC_START" -v e="$PC_END" -v os="$PC_OLD_START" -v oe="$PC_OLD_END" '$0==s||$0==os{skip=1;next} skip&&($0==e||$0==oe){skip=0;next} !skip{print}' "$1" > "$1.tmp" && cat "$1.tmp" > "$1" && rm -f "$1.tmp"
 }
 
+# agents with their own hook files: added where the project already uses the agent, or with --with
+want_agent() {
+  case ",$WITH," in *",all,"*|*",$1,"*) return 0 ;; esac
+  case "$1" in
+    gemini) [ -d "$ROOT/.gemini" ] || [ -f "$ROOT/GEMINI.md" ] ;;
+    cursor) [ -d "$ROOT/.cursor" ] || [ -f "$ROOT/.cursorrules" ] ;;
+    copilot) [ -f "$ROOT/.github/copilot-instructions.md" ] || [ -d "$ROOT/.github/instructions" ] || [ -d "$ROOT/.github/hooks" ] ;;
+    *) return 1 ;;
+  esac
+}
+agent_hook_file() { case "$1" in gemini) echo "$ROOT/.gemini/settings.json" ;; cursor) echo "$ROOT/.cursor/hooks.json" ;; copilot) echo "$ROOT/.github/hooks/team-memory.json" ;; esac; }
+agent_snippet() { case "$1" in gemini) echo "$SRC/hooks/gemini-settings.snippet.json" ;; cursor) echo "$SRC/hooks/cursor-hooks.snippet.json" ;; copilot) echo "$SRC/hooks/copilot-hooks.snippet.json" ;; esac; }
+
 ROOT="$(pwd)"
 
 if [[ "$MODE" == "remove-hooks" ]]; then
   echo "Removing team-memory hooks from: $ROOT"
   [ -f "$ROOT/.claude/settings.json" ] && merge_hooks "$ROOT/.claude/settings.json" "$SRC/hooks/claude-settings.snippet.json" remove
   [ -f "$ROOT/.codex/hooks.json" ] && merge_hooks "$ROOT/.codex/hooks.json" "$SRC/hooks/codex-hooks.snippet.json" remove
+  for ag in gemini cursor copilot; do f="$(agent_hook_file $ag)"
+    [ -f "$f" ] && grep -q 'team-memory/hooks/pm-hook.sh' "$f" && merge_hooks "$f" "$(agent_snippet $ag)" remove; done
   remove_precommit
   exit 0
 fi
@@ -296,12 +317,23 @@ else
   upsert_bootstrap "$ROOT/CLAUDE.md"
 fi
 
+# GEMINI.md: Gemini CLI reads it, not AGENTS.md
+if want_agent gemini; then
+  if [ -L "$ROOT/GEMINI.md" ]; then log "= GEMINI.md (symlink to $(readlink "$ROOT/GEMINI.md"), left as is)"
+  elif [ ! -e "$ROOT/GEMINI.md" ]; then printf '@./AGENTS.md\n' > "$ROOT/GEMINI.md"; log "+ $ROOT/GEMINI.md (imports AGENTS.md)"
+  elif grep -qE '(^|[[:space:](])@\.?/?AGENTS\.md([[:space:]).,;:]|$)' "$ROOT/GEMINI.md"; then log "= GEMINI.md (already imports AGENTS.md)"
+  else upsert_bootstrap "$ROOT/GEMINI.md"; fi
+fi
+
 if [[ "$HOOKS" == "yes" ]]; then
   merge_hooks "$ROOT/.claude/settings.json" "$SRC/hooks/claude-settings.snippet.json" add
   merge_hooks "$ROOT/.codex/hooks.json"     "$SRC/hooks/codex-hooks.snippet.json"     add
+  for ag in gemini cursor copilot; do want_agent $ag && merge_hooks "$(agent_hook_file $ag)" "$(agent_snippet $ag)" add; done
   echo
   echo "Hooks: Claude Code may ask you to review/approve project hooks (/hooks), and Codex asks you"
   echo "to trust the project and its hooks the first time. Disable temporarily with: export PM_HOOKS=off"
+  want_agent gemini || want_agent cursor || want_agent copilot ||
+    echo "Gemini CLI, Cursor or GitHub Copilot here too? Add their hooks with: npx team-memory --with=gemini,cursor,copilot"
 fi
 
 echo

@@ -59,17 +59,21 @@ if [ ! -d .memory ] && [ ! -f "$SK/SKILL.md" ]; then
 fi
 
 echo "• agent hooks"
-hookcheck() { # <file> <agent>
-  local f="$1" n
+hookcheck() { # <file> <agent> [hooks expected]
+  local f="$1" n want="${3:-4}"
   if [ ! -f "$f" ]; then warn "$f is missing: no $2 hooks (recall before edits, #hold, capture) — run $FIX"; return; fi
   n="$(grep -c "$NAME/hooks/pm-hook.sh" "$f")"
-  if [ "$n" -ge 4 ]; then ok "$f ($n hooks)"
-  elif [ "$n" -gt 0 ]; then warn "$f has $n of 4 $NAME hooks — run $FIX"
+  if [ "$n" -ge "$want" ]; then ok "$f ($n hooks)"
+  elif [ "$n" -gt 0 ]; then warn "$f has $n of $want $NAME hooks — run $FIX"
   else warn "$f has no $NAME hooks — run $FIX"; fi
   [ -n "$IS_GIT" ] && git check-ignore -q --no-index "$f" 2>/dev/null && warn "$f is gitignored: teammates will not get the hooks"
 }
 hookcheck .claude/settings.json "Claude Code"
 hookcheck .codex/hooks.json Codex
+# other agents: checked where the project uses them
+{ [ -d .gemini ] || [ -f GEMINI.md ]; } && hookcheck .gemini/settings.json "Gemini CLI" 5
+[ -d .cursor ] && hookcheck .cursor/hooks.json Cursor 5
+{ [ -f .github/copilot-instructions.md ] || [ -d .github/hooks ]; } && hookcheck .github/hooks/team-memory.json "GitHub Copilot" 4
 [ -f "$SK/hooks/pm-hook.sh" ] || { grep -qs "$NAME/hooks/pm-hook.sh" .claude/settings.json .codex/hooks.json && bad "the hooks call $SK/hooks/pm-hook.sh, which does not exist — run $FIX"; }
 [ "${PM_HOOKS:-}" = off ] && warn "PM_HOOKS=off in this shell: hooks do nothing (unset PM_HOOKS to turn them on)"
 
@@ -81,6 +85,12 @@ elif grep -qE '(^|[[:space:](])@\.?/?AGENTS\.md([[:space:]).,;:]|$)' CLAUDE.md 2
 elif grep -qF "<!-- $NAME:start -->" CLAUDE.md 2>/dev/null; then ok "CLAUDE.md has the $NAME block"
 elif [ -f CLAUDE.md ]; then warn "CLAUDE.md neither imports AGENTS.md nor has the $NAME block: Claude Code reads CLAUDE.md, not AGENTS.md — run $FIX"
 else warn "no CLAUDE.md: Claude Code will not read AGENTS.md — run $FIX"; fi
+
+if [ -d .gemini ] || [ -f GEMINI.md ]; then
+  if [ -L GEMINI.md ]; then ok "GEMINI.md links to $(readlink GEMINI.md)"
+  elif grep -qE '(^|[[:space:](])@\.?/?AGENTS\.md([[:space:]).,;:]|$)' GEMINI.md 2>/dev/null || grep -qF "<!-- $NAME:start -->" GEMINI.md 2>/dev/null; then ok "GEMINI.md reaches the memory instructions"
+  else warn "GEMINI.md does not import AGENTS.md: Gemini CLI reads GEMINI.md, not AGENTS.md — run $FIX --with=gemini"; fi
+fi
 
 echo "• git"
 if [ -z "$IS_GIT" ]; then warn "not a git repository: memory is not shared, and there is no pre-commit secret check"
