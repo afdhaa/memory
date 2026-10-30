@@ -243,7 +243,7 @@ printf 'A=1\n' > .env; git add -A && git commit -qm init && git rm -q -r old && 
 bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
 check "scan: title from an image heading, summary from the blockquote" 'printf "%s" "$cb" | grep -q "(Shop API)" && printf "%s" "$cb" | grep -q "describes itself as: \"Backend and web app for the clinic shop"' "$cb"
 check "scan: sub-packages with their frameworks and commands" 'printf "%s" "$cb" | grep -q "\`backend/\` — Python (pip) — FastAPI, SQLModel, pytest" && printf "%s" "$cb" | grep -q "(in \`frontend/\`) \`npm run dev\` — vite"' "$cb"
-check "scan: shell scripts, committed .env, no deleted folders" 'printf "%s" "$cb" | grep -q "Shell scripts: \`backend/scripts/test.sh\`" && printf "%s" "$cb" | grep -q "\`.env\` is committed to git" && ! printf "%s" "$cb" | grep -q "\`old/\`"' "$cb"
+check "scan: shell scripts, committed .env, no deleted folders" 'printf "%s" "$cb" | grep -q "Shell scripts: \`backend/scripts/test.sh\`" && printf "%s" "$cb" | grep -q "Committed to git (shared defaults): \`.env\`" && ! printf "%s" "$cb" | grep -q "\`old/\`"' "$cb"
 check "scan: Key facts skip image folders and show sub-package stacks" '! grep "^- Main folders" .memory/index.md | grep -q "img/" && grep "^- Stack" .memory/index.md | grep -q "FastAPI"' "$(cat .memory/index.md)"
 printf -- '- Check the entries in gotchas.md (gotchas.md, unconfirmed) tomorrow.\n' >> .memory/progress.md
 o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"; check "review ignores prose that mentions \"unconfirmed\"" '! printf "%s" "$o" | grep -q "progress.md"' "$o"
@@ -391,6 +391,7 @@ sed -i.b '$d' .memory/index.md; rm -f .memory/index.md.b
 printf '{"session_id":"%s-cl","cwd":"%s","source":"startup"}' "$RUN" "$K" | bash "$SRC/hooks/pm-hook.sh" session-start claude >/dev/null; sleep 1; echo x > src/b.js
 o="$(printf '{"session_id":"%s-cl","cwd":"%s"}' "$RUN" "$K" | bash "$SRC/hooks/pm-hook.sh" stop claude)"
 check "stop: reminds of the changelog the project keeps" 'printf "%s" "$o" | grep -q "unreleased changes at the top of CHANGELOG.md" && printf "%s" "$o" | grep -q "progress.md (your own work state)"' "$o"
+check "stop: the reminder carries the closing checklist" 'printf "%s" "$o" | grep -q "every caveat or surprise you told the user" && printf "%s" "$o" | grep -q "under Blocked"' "$o"
 cd "$S"
 
 echo "• small repos"
@@ -543,6 +544,48 @@ inst --remove-hooks >/dev/null; cd "$A/ag" && inst --remove-hooks >/dev/null
 check "--remove-hooks: other agents' hooks removed, the user's kept" '! grep -q pm-hook "$A/ag2/.cursor/hooks.json" && grep -q mine.sh "$A/ag2/.cursor/hooks.json" && [ ! -e .github/hooks/team-memory.json ] && [ ! -e .cursor/hooks.json ] && ! grep -qs pm-hook .gemini/settings.json' "$(cat "$A/ag2/.cursor/hooks.json")"
 o="$(inst --with=emacs)"; r=$?; check "--with rejects an unknown agent" '[ "$r" = 1 ] && printf "%s" "$o" | grep -q "unknown agent"' "$o"
 
+echo "• scan: more ecosystems"
+eco() { E="$TMP/eco-$1"; mkdir -p "$E" && cd "$E" && git init -q && git config user.email t@t && git config user.name t; }
+escan() { git add -A && git commit -qm i && bash "$SRC/scripts/mem.sh" scan --print 2>&1; }
+eco dotnet; mkdir -p src/Api; printf '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net9.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" /><PackageReference Include="xunit" Version="2.9.0" /></ItemGroup></Project>\n' > src/Api/Api.csproj; echo 'class A{}' > src/Api/Program.cs; o="$(escan)"
+check "scan: .NET frameworks, target and commands" 'printf "%s" "$o" | grep -q "^- .NET (1 project file, net9.0) — ASP.NET Core, Entity Framework Core, xUnit$" && printf "%s" "$o" | grep -q "dotnet run --project src/Api/Api.csproj"' "$o"
+eco java; mkdir -p src/main/java; printf "plugins { id 'org.springframework.boot' version '3.4.0' }\n" > build.gradle; touch gradlew; echo 'class A{}' > src/main/java/A.java; o="$(escan)"
+check "scan: Gradle with Spring Boot and the wrapper" 'printf "%s" "$o" | grep -q "Java/Kotlin (Gradle) — Spring Boot" && printf "%s" "$o" | grep -q "./gradlew bootRun"' "$o"
+eco maven; printf '<project><parent><artifactId>spring-boot-starter-parent</artifactId></parent><dependencies><dependency><artifactId>junit-jupiter</artifactId></dependency></dependencies></project>\n' > pom.xml; o="$(escan)"
+check "scan: Maven with Spring Boot and JUnit" 'printf "%s" "$o" | grep -q "Java/Kotlin (Maven) — Spring Boot, JUnit" && printf "%s" "$o" | grep -q "mvn spring-boot:run"' "$o"
+eco rails; printf "gem 'rails', '~> 8.0'\ngem 'pg'\ngem 'rspec-rails'\n" > Gemfile; o="$(escan)"
+check "scan: Rails with RSpec and PostgreSQL, no bin/rails test without test/" 'printf "%s" "$o" | grep -q "Ruby (Bundler) — Rails ~> 8.0, RSpec, PostgreSQL" && printf "%s" "$o" | grep -q "bundle exec rspec" && ! printf "%s" "$o" | grep -q "bin/rails test"' "$o"
+eco rails2; printf "gem 'rails'\n" > Gemfile; mkdir -p bin test .github/workflows; : > bin/rspec; : > test/a_test.rb; echo 3.3.4 > .ruby-version
+printf 'web: bin/web\nworker: bundle exec sidekiq\n' > Procfile; printf 'A=1\nB=2\n' > .env.production.sample; printf 'X=1\n' > .env.test
+printf 'on: push\njobs:\n  t:\n    steps:\n      - run: |\n          latest=$(git tag \\\n            | sed -E s/v// \\\n            | head -n1)\n          bin/rails test\n' > .github/workflows/ci.yml; o="$(escan)"
+check "scan: Rails test/, Ruby version, Procfile processes, .env samples, CI line continuations" 'printf "%s" "$o" | grep -q "bin/rails test\` — (Rails)" && printf "%s" "$o" | grep -q "Ruby version (.ruby-version): 3.3.4" && printf "%s" "$o" | grep -q "(\`Procfile\`): web, worker" && printf "%s" "$o" | grep -q "\`.env.production.sample\` (2): A, B" && printf "%s" "$o" | grep -q "Committed to git (shared defaults): \`.env.test\`" && printf "%s" "$o" | grep -q "(on push): \`bin/rails test\`$" && ! printf "%s" "$o" | grep -q "| sed"' "$o"
+eco swift; printf 'let package = Package(name: "App", dependencies: [.package(url: "https://github.com/vapor/vapor.git", from: "4.0.0")])\n' > Package.swift; o="$(escan)"
+check "scan: SwiftPM with Vapor" 'printf "%s" "$o" | grep -q "Swift (SwiftPM) — Vapor" && printf "%s" "$o" | grep -q "swift test"' "$o"
+eco cpp; printf 'project(Engine CXX)\nfind_package(GTest REQUIRED)\nenable_testing()\n' > CMakeLists.txt; o="$(escan)"
+check "scan: CMake with GoogleTest and ctest" 'printf "%s" "$o" | grep -q "C/C++ (CMake) — GoogleTest" && printf "%s" "$o" | grep -q "ctest --test-dir build"' "$o"
+eco flutter; printf 'name: app\ndependencies:\n  flutter:\n    sdk: flutter\n' > pubspec.yaml; o="$(escan)"
+check "scan: Flutter commands" 'printf "%s" "$o" | grep -q "^- Dart — Flutter" && printf "%s" "$o" | grep -q "flutter test"' "$o"
+eco mono; mkdir -p ios/App engine; printf 'let package = Package(name: "App")\n' > ios/Package.swift; printf 'project(E CXX)\n' > engine/CMakeLists.txt; echo x > ios/App/a.swift; echo x > engine/a.cpp; o="$(escan)"
+check "scan: Swift and CMake sub-packages of a monorepo, with their stack" 'printf "%s" "$o" | grep -qF "\`engine/\` (C/C++ (CMake)), \`ios/\` (Swift (SwiftPM))"' "$(printf "%s" "$o" | grep -i packages)"
+eco catalog; mkdir -p gradle; printf '[plugins]\nspring-boot = { id = "org.springframework.boot", version = "3.4.0" }\n' > gradle/libs.versions.toml; printf 'plugins { alias(libs.plugins.spring.boot) }\n' > build.gradle.kts; o="$(escan)"
+check "scan: Spring Boot from a Gradle version catalog" 'printf "%s" "$o" | grep -q "Java/Kotlin (Gradle) — Spring Boot"' "$o"
+eco pods; mkdir -p App.xcodeproj; echo x > App.xcodeproj/project.pbxproj; printf "pod 'Alamofire'\n" > Podfile; o="$(escan)"
+check "scan: CocoaPods and an Xcode project" 'printf "%s" "$o" | grep -q "CocoaPods — Alamofire" && printf "%s" "$o" | grep -q "Xcode project: \`App.xcodeproj\`" && printf "%s" "$o" | grep -q "pod install"' "$o"
+eco autotools; printf 'AC_INIT([tool],[1.0])\n' > configure.ac; echo 'int main(){}' > main.c; o="$(escan)"
+check "scan: Autotools" 'printf "%s" "$o" | grep -q "C/C++ (Autotools)" && printf "%s" "$o" | grep -q "make check"' "$o"
+eco elixir; printf 'defp deps do [{:phoenix, "~> 1.7"}, {:ecto_sql, "~> 3.10"}] end\n' > mix.exs; o="$(escan)"
+check "scan: Elixir with Phoenix, Ecto and mix commands" 'printf "%s" "$o" | grep -q "Elixir (Mix) — Phoenix, Ecto" && printf "%s" "$o" | grep -q "mix phx.server"' "$o"
+eco deno; printf '{"tasks":{"test":"deno test -A"},"imports":{"hono":"jsr:@hono/hono@4"}}\n' > deno.json; o="$(escan)"
+check "scan: Deno tasks and framework" 'printf "%s" "$o" | grep -q "^- Deno — Hono" && printf "%s" "$o" | grep -q "deno task test\` — deno test -A"' "$o"
+eco zigsbt; printf 'pub fn build() void {}\n' > build.zig; printf 'libraryDependencies += "dev.zio" %%%% "zio" %% "2.1.0"\n' > build.sbt; printf 'resolver: lts-22.0\n' > stack.yaml; o="$(escan)"
+check "scan: Zig, Scala (sbt) with ZIO, Haskell (Stack)" 'printf "%s" "$o" | grep -q "^- Zig" && printf "%s" "$o" | grep -q "Scala (sbt) — ZIO" && printf "%s" "$o" | grep -q "Haskell (Stack)" && printf "%s" "$o" | grep -q "stack test"' "$o"
+eco infra; printf 'terraform {\n required_providers {\n  google = { source = "hashicorp/google" }\n }\n}\n' > main.tf; printf 'config/features=PackedStringArray("4.3", "Forward Plus")\n' > project.godot; o="$(escan)"
+check "scan: Terraform providers and a Godot project" 'printf "%s" "$o" | grep -q "Terraform — providers: google" && printf "%s" "$o" | grep -q "Godot 4.3"' "$o"
+eco noxtox; printf '[project]\nname = "x"\n[tool.hatch.envs.default]\n' > pyproject.toml; printf '@nox.session\ndef tests(s): pass\n' > noxfile.py; printf '[tox]\nenvlist = py311, py312\n' > tox.ini; o="$(escan)"
+check "scan: Hatch, nox sessions and tox envs" 'printf "%s" "$o" | grep -q "Python (Hatch)" && printf "%s" "$o" | grep -q "sessions: tests" && printf "%s" "$o" | grep -q "envs: py311,py312"' "$o"
+cd "$TMP"; o="$(bash "$SRC/scripts/mem.sh" help 2>&1)"; r=$?
+check "mem.sh help works outside a project" '[ "$r" = 0 ] && printf "%s" "$o" | grep -q "mem.sh search"' "$o"
+
 echo "• audit fixes: robustness"
 B="$A/rob proj"; mkdir -p "$B/src/a/b" && cd "$B" && git init -q && git config user.email t@t && git config user.name t && inst >/dev/null
 touch src/app.js src/x.ts src/a/b/c.ts
@@ -587,10 +630,12 @@ LR="$TMP/longrun"; mkdir -p "$LR/src/pay" && cd "$LR" && git init -q && git conf
 HOME="$TMP/lrhome" bash "$SRC/scripts/install.sh" </dev/null >/dev/null 2>&1
 { printf '# Progress\n\n## Done recently\n'; for i in 1 2 3 4 5 6 7; do printf -- '- item %s\n' "$i"; done; } > .memory/progress.md
 o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"; check "lint: more than 5 Done recently lines" 'printf "%s" "$o" | grep -q "has 7 lines (max 5)"' "$o"
-lc() { printf '{"session_id":"%s-%s","cwd":"%s","prompt":"%s"}' "$RUN" "$1" "$LR" "$2" | bash "$SRC/hooks/pm-hook.sh" prompt claude >/dev/null; grep -c "$3" .memory/inbox.md 2>/dev/null || echo 0; }
+lc() { printf '{"session_id":"%s-%s","cwd":"%s","prompt":"%s"}' "$RUN" "$1" "$LR" "$2" | bash "$SRC/hooks/pm-hook.sh" prompt claude >/dev/null; n="$(grep -c "$3" .memory/inbox.md 2>/dev/null)"; echo "${n:-0}"; }
 check "capture: 'jangan lupa' inside a task is not a correction" '[ "$(lc c1 "Tambah promo beli 3 gratis 1, jangan lupa aturan harga yang ada." "promo beli")" = 0 ]'
 check "capture: 'never mind' is not a correction" '[ "$(lc c2 "Also print prices nicely, actually never mind." "print prices")" = 0 ]'
 check "capture: 'wajib' is a standing instruction" '[ "$(lc c3 "Di project ini setiap fungsi publik wajib punya docstring." "wajib punya docstring")" = 1 ]'
+check "capture: everyday Indonesian (gausah, ga boleh, jgn)" '[ "$(lc c4 "gausah pake lodash di sini ya" "pake lodash")" = 1 ] && [ "$(lc c5 "folder legacy ga boleh diubah" "folder legacy")" = 1 ] && [ "$(lc c6 "jgn commit file env" "commit file env")" = 1 ]'
+check "capture: a question with 'ga boleh' stays a question" '[ "$(lc c7 "kenapa ga boleh pakai superagent di sini?" "pakai superagent")" = 0 ]'
 rm -f .memory/inbox.md
 printf -- '- 2026-10-01 · The payment gateway rejects more than five calls per second with HTTP 429. #payments @src/pay/ (user)\n' >> .memory/gotchas.md
 cat >> .memory/topics/codebase.md <<'TXT'

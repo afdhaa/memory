@@ -22,6 +22,7 @@ if [ ! -d "$ROOT/.memory" ]; then
   case "${1:-}" in
     secrets) exit 0 ;;   # nothing to scan (e.g. pre-commit after .memory/ was removed)
     doctor) ROOT="$ORIG" ;;   # also useful before .memory/ exists
+    help|-h|--help|"") sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     scan) ROOT="$ORIG"
       if [ "$ROOT" = "/" ] || [ "$(cd "$ROOT" && pwd -P)" = "$(cd "$HOME" 2>/dev/null && pwd -P)" ]; then
         echo "Refusing to create .memory/ in $ROOT — run mem.sh scan from the project root." >&2; exit 1

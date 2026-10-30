@@ -3,6 +3,38 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 4.3.1
+- The reminder before stopping (Claude Code, Codex, Gemini CLI, Cursor, Copilot hooks) now carries
+  the closing checklist: caveats told to the user become gotchas, the agent's own choices become
+  `(agent, unconfirmed)` decisions, open questions go under Blocked. Tests on nine repositories
+  showed these were the items most often missing from memory.
+- SKILL.md: when a memory entry changes what the agent does, it says so in one line
+  (`from decisions.md:12: …`), so users see memory at work and can correct it.
+- New user command: "undo" / "batalkan catatan terakhir" removes what the agent wrote last.
+- Correction capture recognises everyday Indonesian: "gausah", "ga/gak/nggak usah", "ga boleh",
+  "tidak boleh", "jgn", "tolong selalu". A question with these words is still not captured.
+- README: the "Talking to the agent" table is a list of examples; any wording and language works.
+- Scan, more ecosystems: .NET (target framework, ASP.NET Core, Blazor, MAUI, Entity Framework Core,
+  xUnit/NUnit/MSTest, `dotnet` commands), Java/Kotlin with Gradle or Maven (Spring Boot, Quarkus,
+  Micronaut, Android, JUnit; wrapper-aware commands), Ruby (Rails, RSpec, Sidekiq, database gems;
+  `bin/rails`, `bundle exec rspec`), Swift (SwiftPM, Vapor; Xcode projects), C/C++ (CMake with
+  GoogleTest, Catch2, Qt…; Meson) and Dart/Flutter commands. Before, Swift and C++ projects got no
+  stack at all, and .NET, Java and Ruby no commands. Also: Spring Boot declared in a Gradle version
+  catalog, CocoaPods (`Podfile`), Autotools (`configure.ac`), and Swift, CMake and Meson sub-packages in
+  a monorepo; sub-packages without a framework now show their stack ("`ios/` (Swift (SwiftPM))").
+  And: Elixir commands and Ecto, Deno tasks and frameworks, Zig, Scala (sbt), Haskell (Stack or Cabal),
+  Godot, Terraform providers and commands, Python with Hatch, nox sessions and tox environments
+  (marked as defined, since CI may run only some of them).
+- Scan, tested on Mastodon (Rails): `bin/rails test` is listed only when there is a `test/` folder
+  (RSpec projects got a wrong test command), `bin/rspec` is used when the binstub exists, and the
+  Ruby version (`.ruby-version`) and declared Rails range are shown. Procfiles list their processes
+  (`web, worker`; `Procfile.dev` for `bin/dev`). Variable names are read from any root `.env.*.sample`
+  / `.example` / `.template` file (`.env.production.sample` was missed), and every committed `.env.*`
+  file is named. CI commands split over lines with `\` are read as one command (a continuation like
+  `| sed …` was shown as a command), and `playwright install` / `touch` are treated as setup.
+- Fix: the scan hung on a Haskell project with only `stack.yaml` (a framework check read stdin).
+- `mem.sh help` works outside a project.
+
 ## 4.3.0
 From a writing test on three real repositories (itsdangerous, ky, godotenv): each memory was written
 by a fresh agent following the skill, then checked claim by claim against the code. 91% of 166

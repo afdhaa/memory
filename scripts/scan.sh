@@ -45,7 +45,8 @@ LANG_TOP="$(printf '%s\n' "$LANGS" | awk -F'\t' 'NF && n++ < 3 { print $2 }' | j
 
 haslock() { [ -f "$1" ] || [ -f "$ROOT/$1" ]; }   # lock files may live at the monorepo root
 known() { # known "<file…>" "name:Display …" → "Display, Display"
-  local text; text="$(cat $1 2>/dev/null | lower)"
+  local text; [ -n "${1// /}" ] || return 0   # no file to read: never fall back to reading stdin
+  text="$(cat $1 2>/dev/null </dev/null | lower)"
   printf '%s\n' "$2" | tr ' ' '\n' | while IFS=: read -r k v; do
     [ "$k" = "${SELF:-}" ] && continue   # the project itself (Django's own pyproject lists django)
     printf '%s\n' "$text" | grep -qE "(^|[^a-z0-9_.-])$k([^a-z0-9_-]|$)" && printf '%s\n' "${v//_/ }"; done | awk '!s[$0]++' | join ', '
@@ -95,10 +96,11 @@ fi
 PYFILES="$(ls pyproject.toml setup.py setup.cfg Pipfile requirements*.txt 2>/dev/null | tr '\n' ' ')"
 if [ -n "$PYFILES" ]; then
   tool=pip; haslock uv.lock && tool=uv; haslock poetry.lock && tool=Poetry; haslock Pipfile.lock && tool=Pipenv; haslock pdm.lock && tool=PDM
+  [ "$tool" = pip ] && grep -qs '^\[tool\.hatch' pyproject.toml && tool=Hatch
   fw="$(known "$PYFILES" "django:Django flask:Flask fastapi:FastAPI starlette:Starlette pydantic:Pydantic sqlalchemy:SQLAlchemy sqlmodel:SQLModel alembic:Alembic graphene:Graphene strawberry-graphql:Strawberry ariadne:Ariadne celery:Celery pytest:pytest numpy:NumPy pandas:pandas scikit-learn:scikit-learn torch:PyTorch tensorflow:TensorFlow transformers:Transformers langchain:LangChain requests:requests httpx:httpx streamlit:Streamlit uvicorn:Uvicorn gunicorn:Gunicorn ruff:Ruff mypy:mypy")"
   STACK="${STACK}- Python ($tool)${fw:+ — $fw}"$'\n'
   has .python-version && STACK="${STACK}- Python version: $(head -n1 .python-version)"$'\n'
-  pr=""; case "$tool" in uv) pr="uv run ";; Poetry) pr="poetry run ";; PDM) pr="pdm run ";; Pipenv) pr="pipenv run ";; esac
+  pr=""; case "$tool" in uv) pr="uv run ";; Poetry) pr="poetry run ";; PDM) pr="pdm run ";; Pipenv) pr="pipenv run ";; Hatch) pr="hatch run ";; esac
   has tests/runtests.py && CMDS="${CMDS}- \`${pr}python tests/runtests.py\` — the project's own test runner (\`tests/runtests.py\`)"$'\n' && FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`${pr}python tests/runtests.py\`"
   has manage.py && CMDS="${CMDS}- \`${pr}python manage.py runserver\` · \`${pr}python manage.py migrate\` — (Django)"$'\n'
   # Poe the Poet tasks ([tool.poe.tasks]) are often the real entry points
@@ -109,6 +111,13 @@ if [ -n "$PYFILES" ]; then
     case "$poe" in *"poe test\`"*) FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`${pr}poe test\`";; esac
   fi
   case "$fw" in *pytest*) CMDS="${CMDS}- \`${pr}pytest\` — (conventional)"$'\n'; FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`${pr}pytest\`";; esac
+  if has noxfile.py; then
+    ses="$(grep -A2 -E '^@nox\.session' noxfile.py | sed -n 's/^def \([A-Za-z0-9_]*\).*/\1/p' | awk '!s[$0]++' | head -n 10 | join ', ')"
+    CMDS="${CMDS}- \`nox\` · \`nox -s <session>\`${ses:+ — sessions: $ses}"$'\n'
+  fi
+  tx=""; has tox.ini && tx="$(sed -n 's/^[[:space:]]*env_\{0,1\}list[[:space:]]*=[[:space:]]*//p' tox.ini | head -n 1 | tr -d ' ')"
+  { has tox.ini || grep -qs '^\[tool\.tox' pyproject.toml || has tox.toml; } &&
+    CMDS="${CMDS}- \`tox\` · \`tox -e <env>\`${tx:+ — envs: $tx} (defined here; CI may run only some of them)"$'\n'
 fi
 if has go.mod; then
   mod="$(awk '$1 == "module" { print $2; exit }' go.mod)"; gov="$(awk '$1 == "go" { print $2; exit }' go.mod)"
@@ -129,13 +138,126 @@ if has composer.json; then
   CMDS="${CMDS}$(printf '%s\n' "$CP" | awk -F'\t' '$1 == "scripts" && $2 !~ /^(pre|post)-/ && n++ < 10 { print "- `composer run " $2 "` — " $3 }' | clip 120)"$'\n'
   has artisan && CMDS="${CMDS}- \`php artisan serve\` · \`php artisan test\` — (Laravel)"$'\n'
 fi
-if has Gemfile; then fw="$(known Gemfile "rails:Rails sinatra:Sinatra rspec:RSpec sidekiq:Sidekiq")"; STACK="${STACK}- Ruby (Bundler)${fw:+ — $fw}"$'\n'; fi
-if has pom.xml; then fw="$(known pom.xml "spring-boot:Spring_Boot quarkus:Quarkus junit:JUnit")"; STACK="${STACK}- Java/Kotlin (Maven)${fw:+ — $fw}"$'\n'; fi
-if has build.gradle || has build.gradle.kts; then fw="$(known "build.gradle build.gradle.kts" "spring-boot:Spring_Boot com.android:Android ktor:Ktor junit:JUnit")"; STACK="${STACK}- Java/Kotlin (Gradle)${fw:+ — $fw}"$'\n'; fi
-root_has '.*\.(csproj|sln)' && STACK="${STACK}- .NET ($(printf '%s\n' "$FILES" | grep -cE '\.csproj$') project files)"$'\n'
-if has pubspec.yaml; then fw="$(known pubspec.yaml "flutter:Flutter")"; STACK="${STACK}- Dart${fw:+ — $fw}"$'\n'; fi
-if has mix.exs; then fw="$(known mix.exs "phoenix:Phoenix ecto:Ecto")"; STACK="${STACK}- Elixir (Mix)${fw:+ — $fw}"$'\n'; fi
-{ has deno.json || has deno.jsonc; } && STACK="${STACK}- Deno"$'\n'
+addfact() { FACT_CMDS="${FACT_CMDS:+$FACT_CMDS · }\`$1\`"; }
+if has Gemfile; then
+  fw="$(known Gemfile "rails:Rails sinatra:Sinatra hanami:Hanami rspec[a-z-]*:RSpec minitest:Minitest sidekiq:Sidekiq puma:Puma pg:PostgreSQL mysql2:MySQL sqlite3:SQLite")"
+  # the declared Rails range, e.g. gem 'rails', '~> 8.1.0' → Rails ~> 8.1.0
+  rv="$(sed -nE "s/^[[:space:]]*gem[[:space:]]+['\"]rails['\"][[:space:]]*,[[:space:]]*['\"]([^'\"]+)['\"].*/\\1/p" Gemfile | head -n1)"
+  [ -n "$rv" ] && fw="${fw/Rails/Rails $rv}"
+  STACK="${STACK}- Ruby (Bundler)${fw:+ — $fw}"$'\n'
+  for f in .ruby-version; do has "$f" && STACK="${STACK}- Ruby version ($f): $(head -n1 "$f")"$'\n'; done
+  if [ -z "${SUBPKG:-}" ]; then
+    # Rails' own test runner only where there is a test/ folder; RSpec projects keep their tests in spec/
+    rt=""; printf '%s\n' "$FILES" | grep -q '^test/' && rt=" · \`bin/rails test\`"
+    case "$fw" in *Rails*) CMDS="${CMDS}- \`bin/rails server\` · \`bin/rails db:migrate\`$rt — (Rails)"$'\n' ;; esac
+    has bin/dev && CMDS="${CMDS}- \`bin/dev\` — the project's dev script"$'\n'
+    rs="bundle exec rspec"; has bin/rspec && rs="bin/rspec"
+    case "$fw" in *RSpec*) CMDS="${CMDS}- \`$rs\` — $( [ "$rs" = bin/rspec ] && echo "the project's RSpec binstub" || echo "(conventional)")"$'\n'; addfact "$rs" ;;
+                   *Rails*) [ -n "$rt" ] && addfact "bin/rails test" ;; esac
+  fi
+fi
+JAVA_FW="spring-boot[a-z-]*:Spring_Boot org.springframework.boot:Spring_Boot quarkus[a-z-]*:Quarkus micronaut[a-z-]*:Micronaut com.android[a-z.]*:Android ktor[a-z-]*:Ktor hibernate[a-z-]*:Hibernate lombok:Lombok junit[a-z-]*:JUnit"
+if has pom.xml; then
+  fw="$(known pom.xml "$JAVA_FW")"; STACK="${STACK}- Java/Kotlin (Maven)${fw:+ — $fw}"$'\n'
+  mv="mvn"; has mvnw && mv="./mvnw"
+  if [ -z "${SUBPKG:-}" ]; then
+    CMDS="${CMDS}- \`$mv package\` · \`$mv test\`$(case "$fw" in (*Spring*) echo " · \`$mv spring-boot:run\`";; (*Quarkus*) echo " · \`$mv quarkus:dev\`";; esac) — (conventional)"$'\n'; addfact "$mv test"
+  fi
+fi
+if has build.gradle || has build.gradle.kts; then
+  fw="$(known "build.gradle build.gradle.kts gradle/libs.versions.toml" "$JAVA_FW")"; STACK="${STACK}- Java/Kotlin (Gradle)${fw:+ — $fw}"$'\n'
+  gr="gradle"; has gradlew && gr="./gradlew"
+  if [ -z "${SUBPKG:-}" ]; then
+    CMDS="${CMDS}- \`$gr build\` · \`$gr test\`$(case "$fw" in (*Spring*) echo " · \`$gr bootRun\`";; (*Quarkus*) echo " · \`$gr quarkusDev\`";; esac) — (conventional)"$'\n'; addfact "$gr test"
+  fi
+fi
+if root_has '.*\.(csproj|fsproj|sln|slnx)'; then
+  PROJ="$(printf '%s\n' "$FILES" | grep -E '\.(cs|fs)proj$' | head -n 20)"
+  fw="$( { printf '%s\n' "$PROJ" | while IFS= read -r p; do cat "$p"; done 2>/dev/null; } | lower | awk '
+    /sdk="microsoft\.net\.sdk\.web"/ { f["ASP.NET Core"] = 1 } /sdk="microsoft\.net\.sdk\.blazorwebassembly"/ { f["Blazor"] = 1 }
+    /microsoft\.aspnetcore/ { f["ASP.NET Core"] = 1 } /microsoft\.entityframeworkcore/ { f["Entity Framework Core"] = 1 } /dapper/ { f["Dapper"] = 1 }
+    /"xunit/ { f["xUnit"] = 1 } /"nunit/ { f["NUnit"] = 1 } /"mstest/ { f["MSTest"] = 1 } /microsoft\.maui|<usemaui>true/ { f[".NET MAUI"] = 1 }
+    match($0, /<targetframeworks?>[^<]*/) && tfm == "" { tfm = substr($0, RSTART, RLENGTH); sub(/.*>/, "", tfm) }
+    END { n = split("ASP.NET Core|Blazor|.NET MAUI|Entity Framework Core|Dapper|xUnit|NUnit|MSTest", K, "|"); o = ""
+          for (i = 1; i <= n; i++) if (K[i] in f) o = o (o != "" ? ", " : "") K[i]; print (tfm != "" ? tfm : "-") "\t" o }')"
+  tfm="${fw%%	*}"; fw="${fw#*	}"
+  np="$(printf '%s\n' "$PROJ" | grep -c .)"
+  STACK="${STACK}- .NET ($np project file$([ "$np" -eq 1 ] || echo s)$([ "$tfm" != "-" ] && echo ", $tfm"))${fw:+ — $fw}"$'\n'
+  if [ -z "${SUBPKG:-}" ]; then
+    web="$(printf '%s\n' "$PROJ" | while IFS= read -r p; do grep -qiE 'Sdk="Microsoft\.NET\.Sdk\.(Web|BlazorWebAssembly)"' "$p" 2>/dev/null && { printf '%s\n' "$p"; break; }; done)"
+    CMDS="${CMDS}- \`dotnet build\` · \`dotnet test\`${web:+ · \`dotnet run --project $web\`} — (conventional)"$'\n'; addfact "dotnet test"
+  fi
+fi
+if has Package.swift; then
+  fw="$(known Package.swift "vapor:Vapor hummingbird:Hummingbird swift-nio:SwiftNIO alamofire:Alamofire swift-argument-parser:ArgumentParser swift-composable-architecture:TCA")"
+  STACK="${STACK}- Swift (SwiftPM)${fw:+ — $fw}"$'\n'
+  [ -z "${SUBPKG:-}" ] && { CMDS="${CMDS}- \`swift build\` · \`swift test\` — (conventional)"$'\n'; addfact "swift test"; }
+fi
+xc="$(printf '%s\n' "$FILES" | sed -n 's#^\([^/]*\.xcodeproj\)/.*#\1#p' | head -n 1)"
+if has Podfile; then
+  fw="$(known Podfile "alamofire:Alamofire firebase[a-z/]*:Firebase realmswift:Realm snapkit:SnapKit kingfisher:Kingfisher rxswift:RxSwift")"
+  STACK="${STACK}- CocoaPods${fw:+ — $fw}"$'\n'; [ -z "${SUBPKG:-}" ] && CMDS="${CMDS}- \`pod install\` — then open the \`.xcworkspace\`, not the \`.xcodeproj\`"$'\n'
+fi
+[ -n "$xc" ] && [ -z "${SUBPKG:-}" ] && { STACK="${STACK}- Xcode project: \`$xc\`"$'\n'; CMDS="${CMDS}- \`xcodebuild test -scheme <scheme>\` — (conventional; schemes: \`xcodebuild -list\`)"$'\n'; }
+if has CMakeLists.txt; then
+  fw="$(known CMakeLists.txt "gtest:GoogleTest googletest:GoogleTest catch2:Catch2 doctest:doctest boost:Boost qt5:Qt qt6:Qt opencv:OpenCV fmt:fmt")"
+  STACK="${STACK}- C/C++ (CMake)${fw:+ — $fw}"$'\n'
+  if [ -z "${SUBPKG:-}" ]; then
+    CMDS="${CMDS}- \`cmake -B build && cmake --build build\`$(grep -qiE 'enable_testing|add_test|gtest|catch2|doctest' CMakeLists.txt && echo ' · `ctest --test-dir build`') — (conventional)"$'\n'
+    grep -qiE 'enable_testing|add_test|gtest|catch2|doctest' CMakeLists.txt && addfact "ctest --test-dir build"
+  fi
+elif has configure.ac || has configure.in || has configure; then
+  STACK="${STACK}- C/C++ (Autotools)"$'\n'
+  [ -z "${SUBPKG:-}" ] && { CMDS="${CMDS}- $(has configure || echo '`autoreconf -i` · ')\`./configure && make\` · \`make check\` — (conventional)"$'\n'; addfact "make check"; }
+elif has meson.build; then
+  STACK="${STACK}- C/C++ (Meson)"$'\n'
+  [ -z "${SUBPKG:-}" ] && { CMDS="${CMDS}- \`meson setup build && meson compile -C build\` · \`meson test -C build\` — (conventional)"$'\n'; addfact "meson test -C build"; }
+fi
+if has pubspec.yaml; then
+  fw="$(known pubspec.yaml "flutter:Flutter flutter_riverpod:Riverpod riverpod:Riverpod flutter_bloc:Bloc provider:Provider get:GetX dio:Dio")"
+  STACK="${STACK}- Dart${fw:+ — $fw}"$'\n'
+  if [ -z "${SUBPKG:-}" ]; then
+    case "$fw" in Flutter*) CMDS="${CMDS}- \`flutter run\` · \`flutter test\` — (conventional)"$'\n'; addfact "flutter test" ;;
+                  *) CMDS="${CMDS}- \`dart run\` · \`dart test\` — (conventional)"$'\n'; addfact "dart test" ;; esac
+  fi
+fi
+if has mix.exs; then
+  fw="$(known mix.exs "phoenix:Phoenix phoenix_live_view:LiveView ecto[a-z_]*:Ecto absinthe:Absinthe oban:Oban")"; STACK="${STACK}- Elixir (Mix)${fw:+ — $fw}"$'\n'
+  if [ -z "${SUBPKG:-}" ]; then
+    CMDS="${CMDS}- \`mix deps.get\` · \`mix test\`$(case "$fw" in (*Phoenix*) echo ' · `mix phx.server`';; esac) — (conventional)"$'\n'; addfact "mix test"
+  fi
+fi
+for dj in deno.json deno.jsonc; do
+  has "$dj" || continue
+  fw="$(known "$dj" "hono:Hono fresh:Fresh oak:Oak")"; STACK="${STACK}- Deno${fw:+ — $fw}"$'\n'
+  t="$(jget "$dj" tasks | awk -F'\t' '$1 == "tasks" && n++ < 10 { print "- `deno task " $2 "` — " $3 }' | clip 120)"
+  if [ -n "$t" ]; then CMDS="${CMDS}${t}"$'\n'; printf '%s' "$t" | grep -q '`deno task test`' && addfact "deno task test"
+  elif [ -z "${SUBPKG:-}" ]; then CMDS="${CMDS}- \`deno test\` — (conventional)"$'\n'; addfact "deno test"; fi
+  break
+done
+if has build.zig; then
+  STACK="${STACK}- Zig"$'\n'; [ -z "${SUBPKG:-}" ] && { CMDS="${CMDS}- \`zig build\` · \`zig build test\` — (conventional)"$'\n'; addfact "zig build test"; }
+fi
+if has build.sbt; then
+  fw="$(known build.sbt "cats-effect:Cats_Effect zio:ZIO akka[a-z-]*:Akka pekko[a-z-]*:Pekko play:Play http4s[a-z-]*:http4s spark[a-z-]*:Spark scalatest:ScalaTest munit:MUnit")"
+  STACK="${STACK}- Scala (sbt)${fw:+ — $fw}"$'\n'; [ -z "${SUBPKG:-}" ] && { CMDS="${CMDS}- \`sbt compile\` · \`sbt test\` — (conventional)"$'\n'; addfact "sbt test"; }
+fi
+HSF="$(ls package.yaml *.cabal 2>/dev/null | tr '\n' ' ')"
+if has stack.yaml || has cabal.project || [ -n "$HSF" ]; then
+  fw="$(known "$HSF" "servant:Servant yesod:Yesod scotty:Scotty aeson:aeson hspec:Hspec tasty:Tasty")"
+  if has stack.yaml; then hs=stack; else hs=cabal; fi
+  STACK="${STACK}- Haskell ($( [ "$hs" = stack ] && echo Stack || echo Cabal))${fw:+ — $fw}"$'\n'
+  [ -z "${SUBPKG:-}" ] && { CMDS="${CMDS}- \`$hs build\` · \`$hs test\` — (conventional)"$'\n'; addfact "$hs test"; }
+fi
+if has project.godot; then
+  gv="$(sed -n 's/.*config\/features=PackedStringArray("\([0-9][0-9.]*\)".*/\1/p' project.godot | head -n 1)"
+  STACK="${STACK}- Godot${gv:+ $gv} (\`project.godot\`)"$'\n'
+fi
+if [ -z "${SUBPKG:-}" ] && ls ./*.tf >/dev/null 2>&1; then
+  pv="$(cat ./*.tf 2>/dev/null | sed -n 's/.*source[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' | grep -E '^[a-z0-9-]+/[a-z0-9-]+$' | sed 's#.*/##' | awk '!s[$0]++' | head -n 6 | join ', ')"
+  STACK="${STACK}- Terraform${pv:+ — providers: $pv}"$'\n'
+  CMDS="${CMDS}- \`terraform init\` · \`terraform validate\` · \`terraform plan\` — (conventional)"$'\n'
+fi
 for f in .nvmrc .node-version; do has "$f" && STACK="${STACK}- Node version ($f): $(head -n1 "$f")"$'\n'; done
 has .tool-versions && STACK="${STACK}- .tool-versions: $(grep -v '^#' .tool-versions | join ', ')"$'\n'
 return 0
@@ -145,7 +267,7 @@ detect_stack
 
 # ---- sub-packages (monorepos): manifests one or two folders deep ----
 PLAIN=""
-SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs)$' |
+SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs|Package\.swift|CMakeLists\.txt|meson\.build)$' |
   grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|samples?|integrations?|fixtures?|tests?|__tests__|e2e|docs?|bench(mark)?s?|benchmark-apps|playgrounds?|templates?|vendor-bin|tools?/[^/]+-bin|\.[^/]+)/' | sed 's#/[^/]*$##' | awk '!s[$0]++')"
 # the 8 largest packages (by files), not the first 8 alphabetically: in big monorepos those are the ones people work in
 SUBDIRS="$(printf '%s\n' "$FILES" | C="$SUBDIRS" awk -F/ 'BEGIN { n = split(ENVIRON["C"], L, "\n"); for (i = 1; i <= n; i++) if (L[i] != "") W[L[i]] = 1 }
@@ -159,7 +281,7 @@ while IFS= read -r d; do
   cm="$(printf '%s\n' "$sub" | sed '1,/^@@$/d' | sed "s#^- #- (in $BT$d/$BT) #")"
   # no framework found ("- `d/` — Node.js (yarn)"): list it once at the end instead of a line of its own
   if [ -n "$st" ] && [ "$(printf '%s\n' "$st" | grep -c ' — .* — ')" -eq 0 ] && [ "$(printf '%s\n' "$st" | grep -c .)" -eq 1 ]; then
-    PLAIN="${PLAIN:+$PLAIN, }$BT$d/$BT"
+    PLAIN="${PLAIN:+$PLAIN, }$BT$d/$BT (${st#* — })"
   elif [ -n "$st" ]; then STACK="${STACK}${st}"$'\n'; fi
   [ -n "$cm" ] && CMDS="${CMDS}${cm}"$'\n'
 done <<EOF
@@ -210,7 +332,7 @@ while IFS= read -r f; do
     function add(list, v) { return index(", " list ", ", ", " v ", ") ? list : list (list != "" ? ", " : "") v }
     function cmd(c, more) {   # 1: recorded (or a duplicate); 0: skipped as install or setup
       c = trim(c); if (c ~ /^["\047]/ && substr(c, 1, 1) == substr(c, length(c))) c = unq(c)
-      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|npx playwright install|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo |exit |test |\[ |git fetch|cat |gh extension|\$?(env:)?[A-Za-z_][A-Za-z0-9_]*=|cd |export |mkdir |chmod |sudo |set [-+]|;;|do$|do |\{|\}|local |read |shift|if |elif |[^ ]*\)$|then|else|fi$|for |while |done$|case |esac$|#)/) return 0   # installs and runner setup say nothing about what CI checks
+      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|((npx|bunx|yarn( run)?|pnpm( exec)?) )?playwright install|touch |[|&)]|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo |exit |test |\[ |git fetch|cat |gh extension|\$?(env:)?[A-Za-z_][A-Za-z0-9_]*=|cd |export |mkdir |chmod |sudo |set [-+]|;;|do$|do |\{|\}|local |read |shift|if |elif |[^ ]*\)$|then|else|fi$|for |while |done$|case |esac$|#)/) return 0   # installs and runner setup say nothing about what CI checks
       if (more) c = c " …"
       if (length(c) > 90) c = substr(c, 1, 87) "…"
       if (!(c in seen) && nc < 8) { seen[c] = 1; cmds = cmds (nc++ ? ", " : "") "`" c "`" }
@@ -252,8 +374,9 @@ while IFS= read -r f; do
         if (ink && $0 ~ /[^ \t]/ && ind <= ki) ink = 0
         if (ink) { if (ink == 1) combo($0); next }
         mvals($0); next } }
-    blk == 1 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/) { if (RLENGTH > bi) { first = $0; blk = 2; next } blk = 0 } }
-    blk == 2 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH > bi) { if (cmd(first, 1)) blk = 0; else first = $0; next } if ($0 ~ /[^ \t]/) { cmd(first, 0); blk = 0 } }
+    function setf(t) { cont = (t ~ /\\[ \t]*$/); if (cont) sub(/[ \t]*\\[ \t]*$/, "", t); first = t }   # a line ending in \ goes on below
+    blk == 1 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/) { if (RLENGTH > bi) { setf($0); blk = 2; next } blk = 0 } }
+    blk == 2 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH > bi) { if (cont) { cont = ($0 ~ /\\[ \t]*$/); next } if (cmd(first, 1)) blk = 0; else setf($0); next } if ($0 ~ /[^ \t]/) { cmd(first, 0); blk = 0 } }
     /^[ \t]*(- )?run:[ \t]*[|>]/ { match($0, /^[ \t]*(- )?/); bi = RLENGTH; blk = 1; next }
     /^[ \t]*(- )?run:/ { t = $0; sub(/^[ \t]*(- )?run:/, "", t); cmd(t) }
     END { if (blk == 2) cmd(first, 0); m = ""; for (i = 1; i <= nk; i++) if (M[keys[i]] != "") m = m (m != "" ? "; " : "") keys[i] " " M[keys[i]]
@@ -277,23 +400,36 @@ for pair in ".gitlab-ci.yml:GitLab CI" "Jenkinsfile:Jenkins" ".circleci/config.y
             "serverless.yml:Serverless Framework" "render.yaml:Render" "railway.json:Railway" "wrangler.toml:Cloudflare Workers" "Chart.yaml:Helm"; do
   has "${pair%%:*}" && INFRA="${INFRA}- ${pair#*:} (\`${pair%%:*}\`)"$'\n'
 done
+# Procfiles: the process names, so "what runs in production / bin/dev" needs no file read
+for f in Procfile Procfile.dev; do
+  has "$f" || continue
+  p="$(sed -nE 's/^([A-Za-z0-9_-]+):.*/\1/p' "$f" | join ', ')"
+  [ -n "$p" ] && INFRA="$(printf '%s' "$INFRA" | sed "s|^- Procfile (Heroku-style) (\`Procfile\`)\$|&: $p|")"$'\n'
+  [ "$f" = Procfile.dev ] && [ -n "$p" ] && INFRA="${INFRA}- \`Procfile.dev\` (local processes, started by \`bin/dev\` or foreman): $p"$'\n'
+done
 tf="$(printf '%s\n' "$FILES" | grep -cE '\.tf$')"; [ "$tf" -gt 0 ] && INFRA="${INFRA}- Terraform: $tf files"$'\n'
 
 # ---- config & environment (names only) ----
 ENV=""; ENV_KEYS=0; ENV_EX=""
-for f in .env.example .env.sample .env.template .env.dist .env.local.example example.env; do
+# samples at the root: .env.example, .env.production.sample, .env.local.example, example.env …
+ENV_SAMPLES="$(printf '%s\n' "$FILES" | grep -E '^(\.env(\.[A-Za-z0-9_-]+)*\.(example|sample|template|dist)|example\.env)$' | head -n 4)"
+for f in $ENV_SAMPLES; do
   has "$f" || continue
   keys="$(sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/p' "$f" | awk '!s[$0]++')"
   n="$(printf '%s\n' "$keys" | grep -c .)"; ENV_KEYS=$((ENV_KEYS + n)); ENV_EX="${ENV_EX:-$f}"
   more=""; [ "$n" -gt 15 ] && more=" … (+$((n - 15)) more)"
   ENV="${ENV}- \`$f\` ($n): $(printf '%s\n' "$keys" | head -n 15 | join ', ')$more"$'\n'
 done
-for f in .env .env.local .env.development .env.production; do
+# other .env files: committed ones are shared defaults, the rest are someone's local values
+envc=""; envl=""
+for f in .env .env.*; do
   [ -f "$f" ] || continue
-  if printf '%s\n' "$FILES" | grep -qxF "$f" && [ -n "$IS_GIT" ] && git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
-    ENV="${ENV}- \`$f\` is committed to git (shared defaults) — values not read; never copy them into memory"$'\n'
-  else ENV="${ENV}- \`$f\` exists locally — values not read; never copy them into memory"$'\n'; fi
+  case "$f" in *.example|*.sample|*.template|*.dist) continue ;; esac
+  if [ -n "$IS_GIT" ] && git ls-files --error-unmatch "$f" >/dev/null 2>&1; then envc="${envc:+$envc, }\`$f\`"
+  else envl="${envl:+$envl, }\`$f\`"; fi
 done
+[ -n "$envc" ] && ENV="${ENV}- Committed to git (shared defaults): $envc — values not read; never copy them into memory"$'\n'
+[ -n "$envl" ] && ENV="${ENV}- Local only: $envl — values not read; never copy them into memory"$'\n'
 
 # ---- layout ----
 CHILDREN="$(printf '%s\n' "$FILES" | awk -F/ 'NF > 2 { c[$1 "\t" $2]++ } END { for (k in c) if (c[k] > 1) print k "\t" c[k] }' |

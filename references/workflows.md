@@ -87,6 +87,7 @@ When lint reports issues, `index.md` passes ~150 lines, a file passes ~300 lines
 | "remember / ingat / catat …" | Record now (project scope), confirm in one line. |
 | "… untuk semua project / everywhere" | Record in `~/.agents/memory/user.md`, confirm. |
 | "forget / lupakan …" | Remove it (strike through a decision), confirm. |
+| "undo / batalkan catatan terakhir" | Show the entries you wrote last (`git diff -- .memory`, or this session's writes), remove what the user points to, confirm in one line. |
 | "what do you know about X" | `mem.sh search X`, summarise with file references. |
 | "freeze / hold / jangan sentuh <area>" | Decision with `@path #hold`. A hold covers whole files or folders; to protect one class or function, write a Rule naming it and say so. "unfreeze" removes `#hold`. |
 | "<output/API/format> must not change" | `index.md` Rule with `@path`, no `#hold`: the code may change while the contract holds. |

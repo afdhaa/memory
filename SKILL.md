@@ -2,7 +2,7 @@
 name: team-memory
 description: Long-term project memory for coding agents, kept as plain Markdown in the repo (`.memory/`) and shared by the team and every agent, plus personal preferences in `~/.agents/memory/user.md`. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for its path) and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, run `mem.sh scan` first. Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "update memory", "review memory", "cek memori", "rapikan memori", "scan ulang", "freeze this area", corrects how you did something, or a message starts with "[team-memory]". Trigger whenever the repo has a `.memory/` folder.
 metadata:
-  version: 4.3.0
+  version: 4.3.1
 ---
 
 # Team Memory
@@ -173,3 +173,5 @@ follow *Clean-up* in `references/workflows.md`.
 
 After writing (or proposing) memory, end your reply with one line the user can veto:
 `📝 memory: +1 gotcha (unconfirmed: supplier 429), rule (#api), progress`. Don't narrate reads.
+When an entry changed what you did, say so in one short line where it matters
+(`from decisions.md:12: Redis is not used here`), so the user sees memory at work and can correct it.

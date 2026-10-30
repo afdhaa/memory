@@ -138,15 +138,18 @@ An entry is written for a teammate who was not there:
 
 ## Talking to the agent
 
-English and Indonesian both work.
+The table shows examples: say it in your own words, in any language, and the agent understands.
+Only the automatic capture of corrections into `inbox.md` (a safety net run by the hooks) looks
+for keywords, in English and Indonesian (including everyday forms such as "gausah", "ga boleh").
 
 | You say | Result |
 |---|---|
 | "remember …" / "ingat ini …" / "catat …" | recorded for this project |
 | "… for all my projects" / "untuk semua project …" | recorded in `user.md` |
 | "forget …" / "lupakan …" | removed (a decision is struck through, not deleted) |
+| "undo that" / "batalkan catatan terakhir" | the agent shows what it wrote last and removes what you point to |
 | "what do you know about X?" | a summary from memory, with file references |
-| "don't touch folder X" / "jangan sentuh …" | the area is frozen: the agent asks before editing it |
+| "don't touch folder X" / "jangan sentuh …" | the area is frozen: the agent asks before editing it ("unfreeze X" lifts it) |
 | "update memory" | records everything worth keeping from this session |
 | "review memory" / "cek memori" | goes through the agent's unconfirmed entries with you |
 | "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites unclear ones |
