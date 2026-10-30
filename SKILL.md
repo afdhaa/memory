@@ -1,8 +1,8 @@
 ---
 name: team-memory
-description: Long-term project memory for coding agents, kept as plain Markdown in the repo (`.memory/`) and shared by the team and every agent, plus personal preferences in `~/.agents/memory/user.md`. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for its path) and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, run `mem.sh scan` first. Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "update memory", "review memory", "cek memori", "rapikan memori", "scan ulang", "freeze this area", corrects how you did something, or a message starts with "[team-memory]". Trigger whenever the repo has a `.memory/` folder.
+description: Long-term project memory for coding agents, kept as plain Markdown in the repo (`.memory/`) and shared by the team and every agent, plus personal preferences in `~/.agents/memory/user.md`. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for its path) and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, run `mem.sh scan` first. Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "update memory", "review memory", "cek memori", "rapikan memori", "scan ulang", "quiz me", "kuis saya", "freeze this area", corrects how you did something, or a message starts with "[team-memory]". Trigger whenever the repo has a `.memory/` folder.
 metadata:
-  version: 4.3.1
+  version: 4.3.2
 ---
 
 # Team Memory
@@ -28,7 +28,8 @@ prevents a mistake.
 Helpers (paths relative to this file): `scripts/mem.sh search <words>` · `path <file>` · `lint` ·
 `review` (unconfirmed entries) · `scan` (index the repo) · `changelog` · `mode [auto|confirm]` ·
 `approve <path>` (lift a `#hold`, only after the user says yes) · `stats` · `doctor` (hooks not
-firing? checks the install).
+firing? checks the install) · `quiz` (questions for a newcomer; "kuis saya": see workflows.md) ·
+`gaps` (busy folders memory says nothing about).
 
 **Read when needed:** `references/writing.md` before writing topics, procedures, `codebase.md`
 sections or `progress.md`; `references/workflows.md` for a new project or a re-scan, confirm mode,
@@ -75,6 +76,7 @@ Write **when it happens**, not only at the end:
 | A decision is made (library, design) | `decisions.md`, with the reason |
 | Something non-obvious bit you (setup step, flaky test, misleading name), or a surprise inside a decision you record (a default that differs from what users expect) | `gotchas.md`, as its own entry |
 | You answered the user's question by reading code or docs | written nowhere: `gotchas.md` or `topics/<area>.md`; in the docs but hard to find: a one-line pointer in `topics/<area>.md` ("Why SHA-1: see docs/concepts.rst") |
+| The user explains a business or project term ("settlement di sini = pencairan ke merchant"), or a term in the code is ambiguous (ask, don't guess) | `topics/glossary.md` (create it and add it to the map on first use), one line per term; check it before acting on a term you have not seen in this project |
 | A multi-step workflow worked and will recur | `procedures/<name>.md` |
 | Substantial knowledge about one area | `topics/<area>.md`, added to the map |
 | The state of the work changed (not after a pure question) | rewrite `progress.md` (personal): only work the user asked for; drop what is done or no longer true; "Done recently" keeps 5 lines at most |

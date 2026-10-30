@@ -6,6 +6,7 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d 2>/dev/null || mktemp -d -t pmtest)"
 P="$TMP/my project"                      # space on purpose
 export PM_USER_MEMORY="$TMP/home/.agents/memory/user.md" PM_HOOKS=on
+export PM_UPDATE_CHECK=off PM_UPDATE_CACHE="$TMP/update-cache"   # no network; the update tests turn it on with a filled cache
 pass=0; fail=0
 ok()   { pass=$((pass + 1)); printf '  ✓ %s\n' "$1"; }
 bad()  { fail=$((fail + 1)); printf '  ✗ %s\n' "$1"; [ -n "${2:-}" ] && printf '      got: %s\n' "$(printf '%s' "$2" | head -c 300)"; }
@@ -121,6 +122,18 @@ o="$(H stop claude "$(J st ',"stop_hook_active":true')")"; check "stop_hook_acti
 o="$(H stop claude "$(J st ',"stop_hook_active":false')")"; check "no new change: silent" '[ "$o" = "{}" ]' "$o"
 sleep 1; echo z >> src/app.js; sleep 1; echo "- progress" >> .memory/progress.md
 o="$(H stop codex "$(J st ',"stop_hook_active":false')")"; check "memory updated after change: silent" '[ "$o" = "{}" ]' "$o"
+
+echo "• update notice"
+mkdir -p "$TMP/update-cache"; echo 99.0.0 > "$TMP/update-cache/latest"
+o="$(PM_UPDATE_CHECK=on H session-start claude "$(J up1 ',"source":"startup"')")"
+check "newer release: shown to the user and told to the agent once" 'printf "%s" "$o" | grep -q "update available: v[0-9.]* → v99.0.0" && printf "%s" "$o" | grep -q "A newer team-memory is out: v99.0.0"' "$o"
+o="$(PM_UPDATE_CHECK=on H session-start claude "$(J up2 ',"source":"startup"')")"
+check "newer release: the agent is not told again the same day, the status line still shows it" 'printf "%s" "$o" | grep -q "update available" && ! printf "%s" "$o" | grep -q "A newer team-memory is out"' "$o"
+echo 0.0.1 > "$TMP/update-cache/latest"; o="$(PM_UPDATE_CHECK=on H session-start claude "$(J up3 ',"source":"startup"')")"
+check "no notice when the installed version is current or newer" '! printf "%s" "$o" | grep -q "update available"' "$o"
+echo 99.0.0 > "$TMP/update-cache/latest"; o="$(H session-start claude "$(J up4 ',"source":"startup"')")"
+check "PM_UPDATE_CHECK=off: no notice" '! printf "%s" "$o" | grep -q "update available"' "$o"
+rm -f "$TMP/update-cache/told"
 
 echo "• write mode"
 MM=".agents/skills/team-memory/scripts/mem.sh"
@@ -283,6 +296,46 @@ check "@path with * matches every folder level" 'bash "$SRC/scripts/mem.sh" path
 o="$(printf '{"session_id":"%s-gl","cwd":"%s","tool_input":{"file_path":"%s/app/product/migrations/0001.py"}}' "$RUN" "$G" "$G" | bash "$SRC/hooks/pm-hook.sh" pre-edit claude)"
 check "#hold on a @path pattern asks before the edit" 'printf "%s" "$o" | grep -q "\"ask\""' "$o"
 o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"; check "lint flags a pattern that matches nothing" 'printf "%s" "$o" | grep -q "lib/\*/gone/, which matches nothing"' "$o"
+echo "• quiz"
+QZ="$TMP/quiz"; mkdir -p "$QZ" && ( cd "$QZ" && git init -q && bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1
+  printf '%s\n' '- 2026-01-01 · Redis is not used here, because one Postgres is enough at our size. #cache @src/db/ (user)' \
+    '- 2026-01-02 · Freeze the billing code while the audit runs. @src/billing/ #hold (user)' \
+    '- ~~2025-01-01 · Use MySQL.~~ superseded 2026-01-01' >> .memory/decisions.md
+  printf '%s\n' '1. **[2026-01-03] The dev server ignores .env.local** #env @vite.config.ts (agent, seen: 1, unconfirmed)' \
+    '   Why: envDir points to config/.' '   Do instead: put local values in config/.env.local.' >> .memory/gotchas.md )
+o="$(cd "$QZ" && bash "$SRC/scripts/mem.sh" quiz -n 9 </dev/null)"
+check "quiz: the decision is shown and the reason asked, with the source line" 'printf "%s" "$o" | grep -q "> Decided: Redis is not used here." && printf "%s" "$o" | grep -q "^One Postgres is enough at our size" && printf "%s" "$o" | grep -q "Source: \`.memory/decisions.md:[0-9]*\` (user)"' "$o"
+check "quiz: #hold and gotcha questions; unconfirmed answers say so; struck-through decisions left out" 'printf "%s" "$o" | grep -q "What must not be changed without asking first in \`src/billing/\`" && printf "%s" "$o" | grep -q "Why does it happen, and what do you do instead?" && printf "%s" "$o" | grep -q "nobody has confirmed it yet" && printf "%s" "$o" | grep -q "gotchas.md:[0-9]*" && ! printf "%s" "$o" | grep -q MySQL' "$o"
+o="$(cd "$QZ" && bash "$SRC/scripts/mem.sh" quiz @src/billing/x.ts </dev/null)"
+check "quiz @path: only entries for that area" '[ "$(printf "%s" "$o" | grep -c "^### ")" = 1 ] && printf "%s" "$o" | grep -q billing' "$o"
+o="$(cd "$QZ" && bash "$SRC/scripts/mem.sh" quiz --since 7d </dev/null)"
+check "quiz --since: nothing recent is said plainly" 'printf "%s" "$o" | grep -q "No entries to ask about from the last 7 days"' "$o"
+
+echo "• glossary and gaps"
+mkdir -p "$QZ/.memory/topics" && printf '%s\n' '# Glossary' '' '- **PO** — Purchase Order from a store to a supplier, not a pre-order. #po (user)' \
+  '- **Settlement** — payout of sales to the merchant, H+1 working day; not invoice payment. @src/payments/ (user)' > "$QZ/.memory/topics/glossary.md"
+o="$(cd "$QZ" && bash "$SRC/scripts/mem.sh" quiz -n 20 </dev/null)"
+check "quiz: glossary terms are asked as \"what does X mean here\"" 'printf "%s" "$o" | grep -q "What does \"PO\" mean in this project?" && printf "%s" "$o" | grep -q "^Purchase Order from a store"' "$o"
+o="$(cd "$QZ" && printf '{"session_id":"%s-gl","cwd":"%s","prompt":"bikin laporan PO bulan ini"}' "$RUN" "$QZ" | bash "$SRC/hooks/pm-hook.sh" prompt claude)"
+check "glossary: a prompt with the term recalls its line" 'printf "%s" "$o" | grep -q "Purchase Order"' "$o"
+GP="$TMP/gaps"; mkdir -p "$GP" && ( cd "$GP" && git init -q && git config user.email a@t && git config user.name a && mkdir -p src/billing src/auth packages/ui/src/forms &&
+  for i in 1 2 3 4 5 6; do echo $i >> src/billing/a.ts; echo $i >> packages/ui/src/forms/f.ts; git add -A; git commit -qm b$i; done &&
+  for i in 1 2 3 4 5; do echo $i >> src/auth/a.ts; git add -A; git -c user.email=b@t commit -qm a$i; done &&
+  for i in 1 2 3 4 5 6 7 8 9; do echo $i >> src/billing/c.ts; git add -A; git -c user.email='renovate[bot]@x' commit -qm r$i; done &&
+  bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1 && echo '- 2026-01-01 · Tokens expire after 1 h, because the IdP says so. @src/auth/ @packages/ (user)' >> .memory/decisions.md )
+o="$(cd "$GP" && bash "$SRC/scripts/mem.sh" gaps)"
+check "gaps: busy folders without memory, inside packages too; tagged ones covered; bots and broad tags do not count" 'printf "%s" "$o" | grep -qE "src/billing/ +6 commits ·  1 person · no memory" && printf "%s" "$o" | grep -q "packages/ui/src/forms/ .*no memory" && printf "%s" "$o" | grep -qE "src/auth/ +5 commits · .*1 mention \(decisions.md\)"' "$o"
+
+echo "• stale mentions"
+SM="$TMP/stale"; mkdir -p "$SM" && ( cd "$SM" && git init -q && git config user.email t@t && git config user.name t && mkdir -p src lib pkg/ui/src &&
+  echo a > src/jwt.ts && echo b > lib/old.py && echo c > pkg/ui/src/Button.tsx && git add -A && git commit -qm i &&
+  git mv src/jwt.ts src/token.ts && git rm -q lib/old.py && git commit -qm c && bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1 &&
+  printf '%s\n' '- 2026-01-01 Tokens are signed in `src/jwt.ts`; parsing in `lib/old.py:12`. (user)' \
+    '- 2026-01-01 Button is `src/Button.tsx`; we import `react-dom/client`; module `github.com/a/b`; see `src/todo.ts`. (user)' \
+    '- 2026-01-01 `lib/legacy.py` was removed last year. (user)' >> .memory/decisions.md )
+o="$(cd "$SM" && bash "$SRC/scripts/mem.sh" lint 2>&1)"
+check "lint: a mentioned file that was renamed or deleted, with the new path and the commit" 'printf "%s" "$o" | grep -q "mentions \`src/jwt.ts\`, renamed to \`src/token.ts\`" && printf "%s" "$o" | grep -q "mentions \`lib/old.py\`, deleted in"' "$o"
+check "lint: unknown path is a note; sub-package paths, imports, modules and history lines are left alone" 'printf "%s" "$o" | grep -q "ℹ .*\`src/todo.ts\`, which is not in the repository" && ! printf "%s" "$o" | grep -qE "Button.tsx|react-dom|github.com|legacy.py"' "$o"
 cd "$S"
 
 echo "• edge cases"

@@ -5,6 +5,7 @@
 # "plugin": run by the Claude Code plugin (hooks/hooks.json); it stays silent in a project that has
 # its own hooks from the installer, so nothing runs twice.
 # Disable: export PM_HOOKS=off      Tune: PM_RECALL_MAX (5), PM_MAX_NUDGES (3)
+# Update notice: once a day, in the background, the newest version number from registry.npmjs.org (PM_UPDATE_CHECK=off)
 set -u
 
 EVENT="${1:-}"
@@ -192,8 +193,33 @@ $files"
 $sus"
   [ "$SOURCE" = "compact" ] && ctx="$ctx
 [team-memory] The conversation was just compacted. If the summary contains decisions, user corrections or progress that are not yet in .memory/, record them now before continuing (confirm mode: add them to your next memory proposal instead)."
+  # newer release on npm: read from a cache refreshed at most once a day in the background, so the
+  # session never waits on the network. Not for the plugin (its marketplace updates it). PM_UPDATE_CHECK=off
+  sysmsg="📝 team-memory loaded"
+  if [ "${PM_UPDATE_CHECK:-on}" != off ] && [ "$VIA" != plugin ]; then
+    UC="${PM_UPDATE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/team-memory}"
+    if mkdir -p "$UC" 2>/dev/null; then
+      if [ -z "$(find "$UC/latest" -mmin -1440 2>/dev/null)" ]; then
+        touch "$UC/latest"   # one try a day, also when offline
+        ( v="$(curl -fsS -m 3 https://registry.npmjs.org/team-memory/latest 2>/dev/null || wget -qO- -T 3 https://registry.npmjs.org/team-memory/latest 2>/dev/null)"
+          v="$(printf '%s' "$v" | grep -oE '"version" *: *"[0-9]+\.[0-9]+\.[0-9]+"' | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          [ -n "$v" ] && printf '%s\n' "$v" > "$UC/latest.tmp" && mv "$UC/latest.tmp" "$UC/latest" ) </dev/null >/dev/null 2>&1 &
+      fi
+      have="$(sed -n 's/^  version: *//p' "$HOOK_DIR/../SKILL.md" 2>/dev/null | head -n1)"
+      new="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+$' "$UC/latest" 2>/dev/null | head -n1)"
+      if [ -n "$have" ] && [ -n "$new" ] && printf '%s\n%s\n' "$have" "$new" | awk -F. 'NR == 1 { split($0, a, ".") } NR == 2 { for (i = 1; i <= 3; i++) if ($i + 0 != a[i] + 0) exit !($i + 0 > a[i] + 0); exit 1 }'; then
+        sysmsg="$sysmsg · update available: v$have → v$new (npx team-memory@latest)"
+        # the agent mentions it once a day at most, not in every session
+        if [ "$(cat "$UC/told" 2>/dev/null)" != "$new $TODAY" ]; then
+          printf '%s\n' "$new $TODAY" > "$UC/told" 2>/dev/null
+          ctx="$ctx
+[team-memory] A newer team-memory is out: v$new (this project has v$have). At the end of your first reply, tell the user in one line: update with \`npx team-memory@latest\` from the project root (global install: add --global). Do not run it yourself."
+        fi
+      fi
+    fi
+  fi
   if [ "$AGENT" = cursor ] || [ "$AGENT" = copilot ]; then out_context SessionStart "$ctx"
-  else printf '{"systemMessage":"📝 team-memory loaded","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(json_escape "$ctx")"; fi
+  else printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(json_escape "$sysmsg")" "$(json_escape "$ctx")"; fi
   ;;
 # ---------------------------------------------------------------------------
 prompt)
@@ -225,6 +251,7 @@ prompt)
   # (b) prompt-based recall: rank memory entries against the prompt
   terms="$(printf '%s' "$PROMPT" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' ' ' | tr ' ' '\n' | awk '
     BEGIN { split("the and for with that this from have what when where which will would could should there their them they then than into your you are was were been being can not but all any how why who use using make made also just like want need get got its it'"'"'s only first check add adds added support supports given like currently still yet also already some more yang dan atau dengan untuk dari pada ini itu ada akan bisa saya kamu anda kita kami mau tidak juga sudah belum lagi apa apakah bagaimana gimana kenapa buat bikin tolong coba dong deh sih nya aja saja jadi kalau kalo karena agar supaya seperti dalam oleh lebih sama harus perlu baru tambahkan tambah ubah ubahkan ganti hapus buatkan perbaiki benerin cek lihat kasih pakai pake add fix update change please thanks makasih tolong", S, " "); for (i in S) stop[S[i]] = 1 }
+    length($0) == 2 && !seen[$0]++ { if (++m <= 6) print; next }   # "po", "qa": matched only as #tags below
     length($0) >= 3 && !($0 in stop) && !seen[$0]++ { print; if (++n >= 12) exit }' | tr '\n' ' ')"
   hits=""
   if [ -n "${terms// /}" ]; then
@@ -249,7 +276,7 @@ prompt)
         P[n] = (FILENAME ~ /topics\/codebase\.md$/ || (FILENAME ~ /\/topics\// && line !~ /^([-*] |[0-9]+\. |### )/))
       }
       END {
-        for (i = 1; i <= n; i++) { low = tolower(U[i]); for (t = 1; t <= nt; t++) if (low ~ ("(^|[^a-z0-9])" T[t])) { M[i, t] = 1; DF[t]++ } }
+        for (i = 1; i <= n; i++) { low = tolower(U[i]); for (t = 1; t <= nt; t++) if (length(T[t]) < 3 ? low ~ ("#" T[t] "([^a-z0-9]|$)") : low ~ ("(^|[^a-z0-9])" T[t])) { M[i, t] = 1; DF[t]++ } }
         need = (nt >= 2) ? 2 : 1
         for (i = 1; i <= n; i++) {
           s = 0; c = 0; tag = 0; low = tolower(U[i])

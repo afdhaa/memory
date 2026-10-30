@@ -13,8 +13,8 @@ works, and your team reviews them in pull requests like any other file.
   database container", "don't touch the legacy auth module": said once, remembered by every session.
 - **One memory for every agent:** Claude Code, Codex, Gemini CLI, Cursor, GitHub Copilot, OpenCode,
   Antigravity and Pi/omp.
-- **No server, no database, no network.** The memory is Markdown, the helpers are bash and awk,
-  the history is git.
+- **No server, no database.** The memory is Markdown, the helpers are bash and awk, the history is
+  git. Memory never leaves your repo; the only request is a daily version check (can be turned off).
 
 ## Quick start
 
@@ -155,6 +155,9 @@ for keywords, in English and Indonesian (including everyday forms such as "gausa
 | "clean up memory" / "rapikan memori" | merges duplicates, removes stale entries, rewrites unclear ones |
 | "rescan the project" / "scan ulang" | refreshes the generated facts and the overview |
 | "don't save this" / "jangan dicatat" | nothing is stored |
+| "settlement here means …" / "PO di sini artinya …" | the term goes into `topics/glossary.md`; the agent reads it whenever the word comes up |
+| "where is memory missing?" / "lengkapi memori" | the busiest folders with no memory; the agent reads the one you pick and proposes entries |
+| "quiz me" / "kuis saya" | five questions on the project's decisions, gotchas and rules; the agent checks your answers and offers to rewrite the entries you misread because of their wording |
 
 ### Auto or confirm mode
 
@@ -179,12 +182,14 @@ From the project root:
     M=.agents/skills/team-memory/scripts/mem.sh
     bash $M search pricing product   # ranked search through project and user memory
     bash $M path src/api/            # entries that apply to a file or folder
-    bash $M lint                     # size, secrets, stale or duplicate entries, missing paths, filler words
+    bash $M lint                     # size, secrets, stale or duplicate entries, files renamed or deleted since, filler words
     bash $M review                   # the agent's unconfirmed entries, oldest first
     bash $M scan                     # re-index the repository into topics/codebase.md
     bash $M changelog                # how this project records changes for its users
     bash $M approve src/api/ 30      # allow edits in a frozen area for 30 minutes
     bash $M stats                    # entries per file and how often hooks used them
+    bash $M quiz                     # 5 questions with answers and sources (--md for an onboarding page)
+    bash $M gaps                     # folders changed most in 90 days that memory says nothing about
     bash $M doctor                   # check the install: hooks, AGENTS.md block, pre-commit, gitignore
 
 **The scan** reads file names, manifests and git history — never the values in `.env` files — and
@@ -207,7 +212,10 @@ explanation above it ("How it fits together" and "Project layout"); a re-scan ne
 
 Turn the hooks off for a session with `export PM_HOOKS=off`. Tuning: `PM_RECALL_MAX` (entries per
 message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
-`PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY` (path of `user.md`). The Gemini CLI, Cursor and Copilot
+`PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY` (path of `user.md`). When a newer version is on npm,
+the status line at session start says so (`update available: v4.3.1 → v4.3.2`) and the agent tells
+you once a day; `PM_UPDATE_CHECK=off` turns that off. The Claude Code plugin is updated by its
+marketplace instead. The Gemini CLI, Cursor and Copilot
 hooks follow those agents' documentation but are new: please
 [report](https://github.com/afdhaa/team-memory/issues) what does not work.
 
@@ -228,8 +236,11 @@ hooks follow those agents' documentation but are new: please
 
 ## Security and privacy
 
-- **No network access.** The scripts make no HTTP requests and send no telemetry; git is only read
-  locally (`git ls-files`, `git log`), never fetched or pushed.
+- **One network request, no telemetry.** Once a day the session-start hook asks
+  `registry.npmjs.org/team-memory/latest` for the newest version number, in the background (a plain
+  GET with nothing about you or the project in it; `mem.sh doctor` asks the same). Turn it off with
+  `export PM_UPDATE_CHECK=off`. Nothing else goes over the network; git is only read locally
+  (`git ls-files`, `git log`), never fetched or pushed.
 - **Official sources:** the npm package [`team-memory`](https://www.npmjs.com/package/team-memory),
   [github.com/afdhaa/team-memory](https://github.com/afdhaa/team-memory) (also the Claude Code plugin
   marketplace `afdhaa/team-memory`) and its listing on skills.sh (`afdhaa/team-memory`). Anything else

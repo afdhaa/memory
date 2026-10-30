@@ -38,6 +38,23 @@ for d in $GLOBALS; do
   else ok "global copy $(home "$d/$NAME") (v$gv)"; fi
 done
 
+echo "• version"
+if [ "${PM_UPDATE_CHECK:-on}" = off ]; then ok "update check off (PM_UPDATE_CHECK=off)"
+else
+  UC="${PM_UPDATE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/team-memory}"
+  new="$(grep -oE '^[0-9]+\.[0-9]+\.[0-9]+$' "$UC/latest" 2>/dev/null | head -n1)"
+  if [ -z "$new" ] || [ -z "$(find "$UC/latest" -mmin -1440 2>/dev/null)" ]; then
+    new="$( { curl -fsS -m 5 https://registry.npmjs.org/team-memory/latest 2>/dev/null || wget -qO- -T 5 https://registry.npmjs.org/team-memory/latest 2>/dev/null; } |
+      grep -oE '"version" *: *"[0-9]+\.[0-9]+\.[0-9]+"' | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+    [ -n "$new" ] && mkdir -p "$UC" 2>/dev/null && printf '%s\n' "$new" > "$UC/latest" 2>/dev/null
+  fi
+  have="${PV:-}"; [ -n "$have" ] || have="$(ver "$HERE/..")"
+  newer() { printf '%s\n%s\n' "$1" "$2" | awk -F. 'NR == 1 { split($0, a, ".") } NR == 2 { for (i = 1; i <= 3; i++) if ($i + 0 != a[i] + 0) exit !($i + 0 > a[i] + 0); exit 1 }'; }
+  if [ -z "$new" ]; then warn "could not reach registry.npmjs.org to check for a newer version"
+  elif newer "$have" "$new"; then warn "v$new is out (this project has v$have) — run $FIX"
+  else ok "v$have is the latest"; fi
+fi
+
 echo "• old name ($OLD)"
 old=0
 for d in .agents/skills .claude/skills $GLOBALS; do

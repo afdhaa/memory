@@ -3,6 +3,41 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 4.3.2
+- Update notice: when a newer version is on npm, the session-start status line says so
+  (`update available: v4.3.1 → v4.3.2 (npx team-memory@latest)`) and the agent tells the user once a
+  day. The version is fetched at most once a day in the background (3-second limit), so a session
+  never waits on the network; offline it stays silent. `mem.sh doctor` shows it too.
+  `PM_UPDATE_CHECK=off` turns it off. Not for the Claude Code plugin, which its marketplace updates.
+- `mem.sh lint` finds stale mentions: a file written in backticks (`src/auth/jwt.ts`) that is gone
+  from the repo is reported with what happened to it, from git history: "renamed to
+  `src/auth/token.ts` in a1b2c3d" or "deleted in a1b2c3d". A path that never existed is a note, not
+  an issue. Left alone: lines that already say it is history ("was removed", "dulu"), ignored or
+  generated paths (`dist/`), files that exist under a sub-package, imports like `react-dom/client`
+  and module paths like `github.com/x/y`. Tested on ten repositories' memory with no false reports.
+- New: `mem.sh quiz`, questions for a newcomer from `decisions.md`, `gotchas.md` and the Rules, each
+  with its answer and source line. A question shows the decision or problem and asks for the reason
+  or the fix, so the answer is never in it; `#hold` areas ask what must not change. In a terminal it
+  asks one at a time (Enter shows the answer; you mark known / not known / unclear wording) and ends
+  with the entries to reread and the ones whose wording confused you. Entries you knew come up less
+  often. `--md` prints a page with folded answers for onboarding, `@path` asks about one area,
+  `--since 30d` about recent entries. Answers to entries nobody confirmed say so.
+- New: `mem.sh gaps`, the folders changed most in the last 90 days (git log; bot commits left out)
+  next to how many memory entries point at them. A busy folder with no entries is knowledge that
+  lives only in people's heads. In a monorepo it looks inside packages (`packages/vite/src/client/`);
+  a broad `@packages/` does not count as covering everything below it. "Lengkapi memori": the agent
+  shows the top folders, reads the one you pick and proposes entries. On vite's own history it found
+  `packages/vite/src/client/` (13 commits, 4 people) with nothing in memory.
+- Glossary: the project's own terms ("settlement", "PO", "nota retur") go into `topics/glossary.md`,
+  one line each: what the word means here, what it is not, where it lives. The agent records terms the
+  user explains, asks about ambiguous ones instead of guessing, and reads the glossary before acting
+  on an unfamiliar term; prompt recall finds the line when the word comes up (two-letter words such
+  as "PO" through their `#po` tag). The quiz asks about
+  terms too ("What does "PO" mean in this project?").
+- "quiz me" / "kuis saya": the agent asks the questions in your language, checks your answers, and
+  offers to rewrite the entries you misread because of their wording, so the quiz also tests whether
+  memory reads well to a person.
+
 ## 4.3.1
 - The reminder before stopping (Claude Code, Codex, Gemini CLI, Cursor, Copilot hooks) now carries
   the closing checklist: caveats told to the user become gotchas, the agent's own choices become

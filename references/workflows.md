@@ -97,6 +97,23 @@ When lint reports issues, `index.md` passes ~150 lines, a file passes ~300 lines
 | "rapikan memori / clean up memory" | Clean-up, then report. |
 | "scan ulang / rescan" | `mem.sh scan`, then update the summary, Key facts and `codebase.md` sections if needed. |
 | "jangan dicatat / don't save this" | Don't write it; remove it from the inbox. |
+| "quiz me / kuis saya [about X]" | See *Quiz* below. |
+| "where is memory missing? / lengkapi memori" | `mem.sh gaps`; show the top 3 folders with no memory. For the one the user picks, read its main files and propose 2–5 entries (gotchas, decisions with their reason, glossary terms) as `(agent, unconfirmed)`; write what the user approves. |
+| "X itu artinya … / X means …" | `topics/glossary.md`, one line (format in `references/writing.md`), confirm in one line. |
+
+## Quiz
+
+The user wants to test what they know of this project, or whether memory reads well to a person.
+1. Get the questions: `mem.sh quiz --md -n 5` (add `@path` for one area, `--since 30d` for recent
+   entries). Each has the entry's line as its source.
+2. Ask one question at a time, in the user's language and in your own words. Never show the answer
+   or hint at it. A question about an `(agent, unconfirmed)` entry says so.
+3. After each answer: right, partly right or wrong, then the entry's answer in one or two sentences
+   with its source (`decisions.md:15`).
+4. At the end: the score, the entries to reread, and the entries the user misread **because of the
+   wording** (too long, two ideas in one, reason missing). For those, propose a rewrite following
+   `references/writing.md`. Write it only if the user says yes; it keeps its source and date.
+Do not record the user's answers or score in memory.
 
 ## Team use
 

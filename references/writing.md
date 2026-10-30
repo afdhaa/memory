@@ -137,6 +137,19 @@ the user's decision `(user)`, the agent's choice `(agent, unconfirmed)` and a go
 
 ## Templates
 
+**Glossary** (`topics/glossary.md`) — the project's own words, alphabetical, one line each: the term,
+what it means **here**, what it is not when that is the usual confusion, and where it lives. Tag short
+or common terms (`#po`) so a prompt with the word recalls the line; add `@path` where the term lives.
+```
+# Glossary
+
+- **Member aktif** — a member with a transaction in the last 90 days; logging in does not count. #member (user)
+- **Nota retur** — goods returned to a supplier; must cite the original invoice, at most 30 days after it. @src/returns/ (user)
+- **PO** — Purchase Order from a store to a supplier, not a pre-order. Table `purchase_orders`. #po (user)
+- **Settlement** — payout of sales to the merchant's account, H+1 working day, job `settle_daily`; not invoice payment. @src/payments/settlement/ (user)
+```
+A definition you inferred from the code is `(agent, unconfirmed)` until the user confirms it.
+
 **Topic file** (`topics/<area>.md`) — a short wiki page, not a pile of bullets:
 ```
 # Pricing
