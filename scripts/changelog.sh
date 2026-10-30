@@ -50,5 +50,9 @@ changelog_info() {
     else
       printf 'file\t%s\teach package has its own changelog (%s, …): add one line to the unreleased section of the changelog of the package you changed, in the style it already uses\n' "${f%%/*}/*/CHANGELOG.md" "$f"
     fi; return; fi
+  # no changelog file, but a release workflow: notes are written when releasing (GitHub Releases)
+  for f in "$r"/.github/workflows/release*.y*ml "$r"/.github/workflows/publish*.y*ml; do
+    [ -f "$f" ] && { printf 'generated\t%s\tno changelog file: releases go through the %s workflow, which writes the release notes: write a clear commit message and PR title (in the form the project uses, e.g. conventional commits); do not create a changelog file\n' "${f#"$r"/}" "${f##*/}"; return; }
+  done
   printf 'none\t-\tthis project has no changelog: ask the user once whether to create CHANGELOG.md ("# Changelog", then "## Unreleased") or whether release notes live elsewhere (GitHub Releases, a website), and record the answer in index.md Rules as "- Changelog: CHANGELOG.md" or "- Changelog: none (<where release notes live>)"\n'
 }

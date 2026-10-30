@@ -15,7 +15,7 @@ scenarios and quizzes: wrong claims went from 9 of 217 (4.1%) to 3 of 212 (1.4%)
 3.3 to 4.0 out of 5, and no quiz answer was wrong or missing (was 1 of 30). On vite (2,916 files,
 a pnpm monorepo): 9 of 10 quiz answers correct, 85 of 90 claims correct, accuracy 5 out of 5. On
 TanStack Query (5,175 files, 29 packages): no quiz answer wrong (5 correct, 5 partly), 69 of 74
-claims correct.
+claims correct. On Nuxt (2,575 files): 7 correct and 3 partly, 77 of 80 claims correct, accuracy 5.
 - `references/writing.md`: rules for short sentences, checking before writing "all/every/each",
   inferences from names and config, reasons that explain instead of repeat, keeping the user's
   scope and the agent's choices (and inferred conventions) apart, one fact in one place, blank lines
@@ -51,6 +51,12 @@ claims correct.
 - SKILL.md and onboarding: run `mem.sh lint` and act on every "checked every case?" note; an exception
   or wider scope the agent adds to a user's instruction goes on its own `(agent, unconfirmed)` line
   below it.
+- Scan, CI: each workflow shows its job names; CI, test, lint and release workflows come first and
+  the rest are counted (Nuxt has 25); more shell syntax is left out of the commands.
+- `mem.sh changelog`: a project with no changelog file but a `release`/`publish` workflow is told that
+  release notes are written at release time, instead of being asked to create a CHANGELOG.md.
+- SKILL.md: every "please confirm" goes under Blocked; a choice that departs from AGENTS.md,
+  CONTRIBUTING or the docs is a Blocked question quoting them, not a decision.
 - `mem.sh changelog` finds one changelog per package in a monorepo (`packages/*/CHANGELOG.md`), and
   recognises changelogs written by conventional-changelog (version headings that link to a compare
   URL) as generated. Before, vite got "no changelog: ask the user".

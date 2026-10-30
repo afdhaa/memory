@@ -83,8 +83,9 @@ Write **when it happens**, not only at the end:
 
 - **Before you finish a task, reread your replies in it.** Every caveat or surprise you told the user
   is in `gotchas.md` or a topic; every behaviour you chose that the user did not specify (scope,
-  order, a side effect) is in `decisions.md` as `(agent, unconfirmed)`; every question still open is
-  under Blocked in `progress.md`. A chat reply, `progress.md` and a clause inside a decision are not
+  order, a side effect) is in `decisions.md` as `(agent, unconfirmed)`; every question still open,
+  including each "please confirm" you wrote, is under Blocked in `progress.md`. A choice that departs
+  from AGENTS.md, CONTRIBUTING or the docs is not a decision: it is a Blocked question quoting them. A chat reply, `progress.md` and a clause inside a decision are not
   where a teammate looks for a pitfall: give each its own entry. Then run `mem.sh lint` and act on
   every `checked every case?` note (confirm it with `grep`, or rewrite the sentence).
 - **The project's own instructions come first** (AGENTS.md, CONTRIBUTING.md, `docs/`). Don't copy

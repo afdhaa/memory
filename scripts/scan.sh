@@ -210,7 +210,7 @@ while IFS= read -r f; do
     function add(list, v) { return index(", " list ", ", ", " v ", ") ? list : list (list != "" ? ", " : "") v }
     function cmd(c, more) {   # 1: recorded (or a duplicate); 0: skipped as install or setup
       c = trim(c); if (c ~ /^["\047]/ && substr(c, 1, 1) == substr(c, length(c))) c = unq(c)
-      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|npx playwright install|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo |exit |\$?(env:)?[A-Za-z_][A-Za-z0-9_]*=|cd |export |mkdir |chmod |sudo |set -|if |elif |then|else|fi$|for |while |done$|case |esac$|#)/) return 0   # installs and runner setup say nothing about what CI checks
+      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|npx playwright install|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo |exit |test |\[ |git fetch|cat |gh extension|\$?(env:)?[A-Za-z_][A-Za-z0-9_]*=|cd |export |mkdir |chmod |sudo |set [-+]|;;|do$|do |\{|\}|local |read |shift|if |elif |[^ ]*\)$|then|else|fi$|for |while |done$|case |esac$|#)/) return 0   # installs and runner setup say nothing about what CI checks
       if (more) c = c " …"
       if (length(c) > 90) c = substr(c, 1, 87) "…"
       if (!(c in seen) && nc < 8) { seen[c] = 1; cmds = cmds (nc++ ? ", " : "") "`" c "`" }
@@ -237,6 +237,9 @@ while IFS= read -r f; do
         if (k ~ /^(name|include|exclude|fail-fast|max-parallel)$/) continue
         gsub(/[][]/, "", v); n = split(v, V, /,/); for (i = 1; i <= n; i++) if ((x = unq(V[i])) != "" && x !~ /\$\{/) M[k] = add(M[k], x)
         if (!(k in mk)) { mk[k] = 1; keys[++nk] = k } } }
+    /^jobs:/ { injobs = 1; inon = 0; next }
+    injobs && /^[^ #]/ { injobs = 0 }
+    injobs && /^  [A-Za-z0-9_-]+:[ \t]*$/ { t = $1; sub(/:$/, "", t); if (nj++ < 10) jobs = jobs (jobs != "" ? ", " : "") t }
     /^on:/ { t = $0; sub(/^on:[ \t]*/, "", t); if (t != "") { gsub(/[][]/, "", t); on = trim(t) } else inon = 1; next }
     inon && /^[^ #]/ { inon = 0 }
     inon && /^  [A-Za-z_]+:/ { t = $1; sub(/:$/, "", t); on = add(on, t) }
@@ -258,13 +261,17 @@ while IFS= read -r f; do
       if (nci > 8) x = x "; …"
       if (x != "") m = (m != "" ? m "; plus " : "entries ") x
       if (cmds == "") { print "NOCMD " name; exit }
-      printf "- GitHub Actions `%s`%s: %s%s\n", name, (on != "" ? " (on " on ")" : ""), cmds, (m != "" ? "; matrix: " m : "") }' "$f")"$'\n'
+      printf "- GitHub Actions `%s`%s%s: %s%s\n", name, (on != "" ? " (on " on ")" : ""), (nj > 1 ? ", jobs " jobs (nj > 10 ? "…" : "") : ""), cmds, (m != "" ? "; matrix: " m : "") }' "$f")"$'\n'
 done <<EOF
-$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' | head -n 12)
+$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' |
+  awk '{ n = tolower($0); sub(/.*\//, "", n); k = (n ~ /^(ci|tests?|main|build|check|lint)[._-]/) ? 0 : (n ~ /release|publish|deploy/) ? 1 : 2; print k "\t" $0 }' |
+  sort -t"$TAB" -k1,1n -k2,2 | cut -f2 | head -n 14)
 EOF
+nwf="$(printf '%s\n' "$FILES" | grep -cE '^\.github/workflows/[^/]+\.ya?ml$')"
 nocmd="$(printf '%s' "$INFRA" | sed -n 's/^NOCMD //p' | sed 's/.*/`&`/' | join ', ')"
 INFRA="$(printf '%s' "$INFRA" | grep -v '^NOCMD ')"$'\n'; [ "$INFRA" = $'\n' ] && INFRA=""
 [ -n "$nocmd" ] && INFRA="${INFRA}- GitHub Actions without shell commands (bots, issue and release automation): $nocmd"$'\n'
+[ "$nwf" -gt 14 ] && INFRA="${INFRA}- $((nwf - 14)) more workflows in \`.github/workflows/\` (CI, test, lint and release ones are listed first)"$'\n'
 for pair in ".gitlab-ci.yml:GitLab CI" "Jenkinsfile:Jenkins" ".circleci/config.yml:CircleCI" "bitbucket-pipelines.yml:Bitbucket Pipelines" \
             "vercel.json:Vercel" "netlify.toml:Netlify" "fly.toml:Fly.io" "Procfile:Procfile (Heroku-style)" "app.yaml:App Engine" \
             "serverless.yml:Serverless Framework" "render.yaml:Render" "railway.json:Railway" "wrangler.toml:Cloudflare Workers" "Chart.yaml:Helm"; do
