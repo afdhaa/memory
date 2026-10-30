@@ -2,7 +2,7 @@
 name: team-memory
 description: Long-term project memory for coding agents, kept as plain Markdown in the repo (`.memory/`) and shared by the team and every agent, plus personal preferences in `~/.agents/memory/user.md`. Use at the START of every task (recall rules, decisions, gotchas, progress; triage `.memory/inbox.md`), on each NEW REQUEST (search related memory), BEFORE EDITING an area (check entries tagged for its path) and BEFORE FINISHING (record decisions, user corrections, gotchas, procedures, progress). In a new project without `.memory/`, run `mem.sh scan` first. Also use when the user says "remember this", "ingat ini", "catat", "jangan lupa", "untuk semua project", "forget that", "lupakan", "what do you know about X", "update memory", "review memory", "cek memori", "rapikan memori", "scan ulang", "freeze this area", corrects how you did something, or a message starts with "[team-memory]". Trigger whenever the repo has a `.memory/` folder.
 metadata:
-  version: 4.2.0
+  version: 4.3.0
 ---
 
 # Team Memory
@@ -66,25 +66,34 @@ Write **when it happens**, not only at the end:
 
 | Event | Where |
 |---|---|
-| User states a rule for the whole project ("always use uv here", "format JSON jangan diubah") | `index.md` Rules |
+| User states a rule for the whole project ("always use uv here", "format JSON jangan diubah"), also inside a correction ("that's what we use in this codebase") | `index.md` Rules |
 | User corrects you about one area or file | `gotchas.md` → "User directives", with its `@path` |
 | User states a preference for every project ("di semua project", "for all my projects"; "always/selalu" only when not tied to this project) | `~/.agents/memory/user.md` (missing? copy the skill's `assets/user/user.md` first); unsure: keep it in the project and ask once |
 | User freezes an area ("jangan sentuh X") | `decisions.md` with `@path #hold` (whole files or folders) |
 | User says an output, API or format must not change | `index.md` Rule with `@path`, no `#hold` |
+| A user instruction contradicts the code or docs ("lib/ is CommonJS" when it is ESM) | tell the user now; keep the instruction in `gotchas.md` User directives with the evidence, `unconfirmed`, and the open question under Blocked in `progress.md` |
 | A decision is made (library, design) | `decisions.md`, with the reason |
-| Something non-obvious bit you (setup step, flaky test, misleading name) | `gotchas.md` |
+| Something non-obvious bit you (setup step, flaky test, misleading name), or a surprise inside a decision you record (a default that differs from what users expect) | `gotchas.md`, as its own entry |
+| You answered the user's question by reading code or docs | written nowhere: `gotchas.md` or `topics/<area>.md`; in the docs but hard to find: a one-line pointer in `topics/<area>.md` ("Why SHA-1: see docs/concepts.rst") |
 | A multi-step workflow worked and will recur | `procedures/<name>.md` |
 | Substantial knowledge about one area | `topics/<area>.md`, added to the map |
-| The state of the work changed (not after a pure question) | rewrite `progress.md` (personal): drop what is done or no longer true; "Done recently" keeps 5 lines at most |
+| The state of the work changed (not after a pure question) | rewrite `progress.md` (personal): only work the user asked for; drop what is done or no longer true; "Done recently" keeps 5 lines at most |
 | Finished work users of the project will notice (feature, fix, breaking change) — not refactors, tests or chores | the project's changelog as `mem.sh changelog` says (a file, fragments, or nothing when notes are generated from commits); none found: ask once, record `- Changelog: CHANGELOG.md` or `- Changelog: none` as a Rule (no answer yet: note the question under Blocked in `progress.md`) |
 | Your change makes a sentence in `topics/` or a procedure wrong | fix it now |
 
+- **Before you finish a task, reread your replies in it.** Every caveat or surprise you told the user
+  is in `gotchas.md` or a topic; every behaviour you chose that the user did not specify (scope,
+  order, a side effect) is in `decisions.md` as `(agent, unconfirmed)`; every question still open is
+  under Blocked in `progress.md`. A chat reply and `progress.md` are not memory the team sees.
 - **The project's own instructions come first** (AGENTS.md, CONTRIBUTING.md, `docs/`). Don't copy
   them; record only what they lack and point to them. If the user contradicts them, ask which wins.
 - **Filter:** *would a fresh agent next week waste time or make a mistake without this?* Don't store
   what code, README or `git log` already say, session narration or guesses.
 - **Never store secrets** (keys, tokens, passwords, connection strings, personal data): write where
   they live (`.env` → `STRIPE_SECRET_KEY`). Found one in memory? Delete it, tell the user to rotate it.
+- **Keep the user's scope.** An instruction for one function or one task is not a project-wide Rule;
+  details you added yourself (a name, a placement, a wider scope) get their own `(agent, unconfirmed)`
+  line, not the user's `(user)` entry.
 - **Before adding,** search for the same subject. If it exists, increment `seen`, refresh the date
   and sharpen it instead of duplicating. Changed facts: edit in place, `(updated YYYY-MM-DD, was: …)`.
   Reversed decisions: `~~old~~ superseded YYYY-MM-DD → see …`, never deleted.
@@ -101,9 +110,13 @@ People read `.memory/` too, in PR reviews. Each entry:
 1. A bold title that is a complete sentence a reader can act on.
 2. What happens, `Why:` (the cause), `Do instead:` (the fix). Full sentences, no private shorthand.
 3. Concrete: the command, file, number or error message — never "sometimes fails".
-4. One idea, 1–3 short lines; more goes to `topics/<area>.md`.
-5. Tags at the end of the title line. When the user writes in another language, add one or two of
-   their words as tags (said "upload produk" → `#upload #produk`).
+4. One idea, 1–3 short lines; sentences of about 30 words at most; more goes to `topics/<area>.md`.
+   One fact in one place: elsewhere point to it instead of writing it again.
+   "All", "every", "each", "only" are claims about the whole codebase: check every case first, or
+   name what you saw.
+5. Tags at the end of the title line. When the user writes in another language, every entry made
+   from their words gets one or two of those words as tags (said "upload produk" → `#upload #produk`):
+   recall in their language depends on it.
 
 **English** unless `index.md` or `user.md` sets `Memory language: <language>`; keep UI text and error
 messages verbatim. **No filler or marketing words** (robust, seamless, leverage, various, several),
@@ -120,7 +133,8 @@ no assistant voice, no guess written as a fact — `mem.sh lint` flags them.
 Why: single-user tool, must not need a server. Rejected: Redis (needs a service). Revisit if: multi-user sync.
 ```
 Decisions go at the top of `decisions.md`, newest first; an `unconfirmed` marker goes on the title line.
-Rules: one sentence with its reason (add the obvious one if the user gave none), at the end of the Rules section:
+Rules: one sentence with its reason, at the end of the Rules section. A `(user)` entry holds only what the user
+said: with no reason given, write "the user's preference", or add yours as a separate `(agent, unconfirmed)` sentence:
 `- Never change the JSON response format; other frontends depend on it. #api @api/serializers.go (user, 2026-10-21)`.
 `user.md` lines look the same, without `@path`.
 
@@ -137,7 +151,8 @@ What the user said is confirmed: `(user, …)`. What **you** concluded starts as
    ("great", "mantap", "thanks") is not approval of an entry you recorded;
 2. it comes up again in a later session (`seen: 2`);
 3. you proved it this session: a run (test, command) proves anything; reading code proves only
-   static facts (a config value, which function calls which), not runtime behaviour.
+   static facts (a config value, which function calls which), not runtime behaviour ("`X("")` fails
+   only on first use" stays unconfirmed until something ran it).
 
 A decision **you** made (design, library) needs the user's approval; 2 and 3 don't count. A decision
 the user asked for is `(user)`; if you chose the details, say so in `Why:`. A proposal the user approved

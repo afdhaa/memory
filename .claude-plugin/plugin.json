@@ -1,6 +1,6 @@
 {
   "name": "team-memory",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "Long-term memory for coding agents: decisions, rules and pitfalls kept as plain Markdown in your repo (.memory/), reviewed by your team in pull requests. Hooks recall memory at session start, on each prompt and before edits. No server, no network.",
   "author": { "name": "Afdhalul Ihsan Rosyidi", "url": "https://github.com/afdhaa" },
   "homepage": "https://github.com/afdhaa/team-memory#readme",

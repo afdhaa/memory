@@ -15,6 +15,11 @@ No `.memory/` anywhere up the tree: from the project root run `bash scripts/mem.
    or job flows through the code, where to start reading) and **"Project layout"** (one line per
    folder: what lives there, where new code goes). Templates: `references/writing.md`. Write only
    what you read in the code, and say when something is unclear.
+   **Before saving, check your own text:** every sentence with "all", "each", "every", "only" or
+   "one X per Y" against a file listing or `grep` (name the exceptions, or rewrite it as what you
+   saw); every sentence you took from the docs against the code (they agree: point to the doc
+   instead; they differ: write what the code does, plus an `(agent, unconfirmed)` note on the
+   mismatch). Key facts stay one line each and do not repeat what `codebase.md` or a Rule says.
    **Small repo** (under ~40 files): 1–2 paragraphs; leave "Project layout" out when the generated
    Layout already says it all.
 4. When the repo already documents its layout, commands, endpoints or design (AGENTS.md, CLAUDE.md,

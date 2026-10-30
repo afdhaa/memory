@@ -195,8 +195,44 @@ $(printf '%s\n' "$FILES" | grep -E '^(docker-compose|compose)[^/]*\.ya?ml$')
 EOF
 df="$(printf '%s\n' "$FILES" | grep -E '(^|/)Dockerfile[^/]*$' | head -n 6 | sed 's/.*/`&`/' | join ', ')"
 [ -n "$df" ] && INFRA="${INFRA}- Docker: $df"$'\n'
-wf="$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' | sed 's#^\.github/workflows/##' | join ', ')"
-[ -n "$wf" ] && INFRA="${INFRA}- GitHub Actions: $wf"$'\n'
+# GitHub Actions: per workflow, its triggers, the commands it runs (installs left out) and its matrix
+# values, so nobody has to guess from tox envs or npm scripts what CI really checks
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  INFRA="${INFRA}$(awk -v name="${f#.github/workflows/}" '
+    function trim(t) { sub(/^[ \t]+/, "", t); sub(/[ \t]+$/, "", t); return t }
+    function unq(t) { t = trim(t); gsub(/^["\047]|["\047]$/, "", t); return t }
+    function add(list, v) { return index(", " list ", ", ", " v ", ") ? list : list (list != "" ? ", " : "") v }
+    function cmd(c, more) { c = trim(c); if (c ~ /^["\047]/ && substr(c, 1, 1) == substr(c, length(c))) c = unq(c)
+      if (more) c = c " …"
+      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|npx playwright install|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo .*>> *"?\$GITHUB_|cd |export |mkdir |chmod |sudo )/) return   # installs and runner setup say nothing about what CI checks
+      if (length(c) > 90) c = substr(c, 1, 87) "…"
+      if (!(c in seen) && nc < 8) { seen[c] = 1; cmds = cmds (nc++ ? ", " : "") "`" c "`" } }
+    function mvals(t,   k, v, n, i, x) {   # key: value pairs on a matrix line, flow ({python: x, os: y}) or block (python: [a, b])
+      if (t ~ /^[ \t]*#/) return; sub(/[ \t]+#.*$/, "", t)
+      if (t ~ /^[ \t]*-[ \t]*[^:{ \t][^:{]*$/ && pk != "") { sub(/^[ \t]*-[ \t]*/, "", t); if ((x = unq(t)) != "" && x !~ /\$\{/) M[pk] = add(M[pk], x); return }   # block list under "key:"
+      if (t ~ /^[ \t]*[A-Za-z_-]+:[ \t]*$/) { pk = trim(t); sub(/:$/, "", pk); if (pk ~ /^(include|exclude)$/) { pk = ""; return } if (!(pk in mk)) { mk[pk] = 1; keys[++nk] = pk } return }
+      gsub(/[{}]/, " ", t); sub(/^[ \t]*-[ \t]*/, "", t)
+      while (match(t, /[A-Za-z_-]+:[ \t]*(\[[^]]*\]|[^,]+)/)) {
+        k = substr(t, RSTART, RLENGTH); t = substr(t, RSTART + RLENGTH); v = k; sub(/^[^:]*:/, "", v); sub(/:.*/, "", k)
+        if (k ~ /^(name|include|exclude|fail-fast|max-parallel)$/) continue
+        gsub(/[][]/, "", v); n = split(v, V, /,/); for (i = 1; i <= n; i++) if ((x = unq(V[i])) != "" && x !~ /\$\{/) M[k] = add(M[k], x)
+        if (!(k in mk)) { mk[k] = 1; keys[++nk] = k } } }
+    /^on:/ { t = $0; sub(/^on:[ \t]*/, "", t); if (t != "") { gsub(/[][]/, "", t); on = trim(t) } else inon = 1; next }
+    inon && /^[^ #]/ { inon = 0 }
+    inon && /^  [A-Za-z_]+:/ { t = $1; sub(/:$/, "", t); on = add(on, t) }
+    inon && /^  - [A-Za-z_]+/ { on = add(on, $2) }
+    /^[ \t]*matrix:/ { match($0, /^[ \t]*/); mi = RLENGTH; inm = 1; t = $0; sub(/^[ \t]*matrix:/, "", t); if (trim(t) != "") mvals(t); next }
+    inm { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH <= mi) inm = 0; else { mvals($0); next } }
+    blk == 1 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/) { if (RLENGTH > bi) { first = $0; blk = 2; next } blk = 0 } }
+    blk == 2 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH > bi) { cmd(first, 1); blk = 0; next } if ($0 ~ /[^ \t]/) { cmd(first, 0); blk = 0 } }
+    /^[ \t]*(- )?run:[ \t]*[|>]/ { match($0, /^[ \t]*(- )?/); bi = RLENGTH; blk = 1; next }
+    /^[ \t]*(- )?run:/ { t = $0; sub(/^[ \t]*(- )?run:/, "", t); cmd(t) }
+    END { if (blk == 2) cmd(first, 0); m = ""; for (i = 1; i <= nk; i++) if (M[keys[i]] != "") m = m (m != "" ? "; " : "") keys[i] " " M[keys[i]]
+      printf "- GitHub Actions `%s`%s: %s%s\n", name, (on != "" ? " (on " on ")" : ""), (cmds != "" ? cmds : "no run commands"), (m != "" ? "; matrix: " m : "") }' "$f")"$'\n'
+done <<EOF
+$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' | head -n 8)
+EOF
 for pair in ".gitlab-ci.yml:GitLab CI" "Jenkinsfile:Jenkins" ".circleci/config.yml:CircleCI" "bitbucket-pipelines.yml:Bitbucket Pipelines" \
             "vercel.json:Vercel" "netlify.toml:Netlify" "fly.toml:Fly.io" "Procfile:Procfile (Heroku-style)" "app.yaml:App Engine" \
             "serverless.yml:Serverless Framework" "render.yaml:Render" "railway.json:Railway" "wrangler.toml:Cloudflare Workers" "Chart.yaml:Helm"; do

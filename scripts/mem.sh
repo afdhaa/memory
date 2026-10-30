@@ -230,6 +230,35 @@ lint)
         ws = ""; while (match(l, re)) { wd = substr(l, RSTART, RLENGTH); gsub(/^[^a-z]+|[^a-z]+$/, "", wd)
           ws = ws (ws != "" ? ", " : "") "\"" wd "\""; l = substr(l, RSTART + RLENGTH - 1) }
         if (ws != "") print FILENAME ":" FNR ": " ws " in: " substr($0, 1, 70) }' ${FILES[@]+"${FILES[@]}"} /dev/null | head -n 10)
+  # long sentences and entries (writing rule 9): hard to read in a PR review; not counted as issues
+  while IFS= read -r m; do echo "ℹ $m"; done < <(awk '
+      function words(t,   n) { gsub(/\((user|agent)[^()]*\)|\[[0-9-]+\]|[#@][^[:space:]]+/, "", t); n = split(t, W, /[[:space:]]+/); return n - (W[1] == "") - (W[n] == "") }
+      function flush() { if (ew > 80) print ef ":" el ": entry of " ew " words (aim for 60) → shorten it or move detail to topics/: " substr(et, 1, 60); ew = 0 }
+      FNR == 1 { flush(); inc = 0; gen = 0; code = 0 }
+      /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
+      /^[[:space:]]*(```|~~~)/ { code = !code; next } code { next }
+      /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
+      /^>|^#[^#]|^##[^#]/ { flush(); next }
+      new = 0
+      /^(- |[0-9]+\. |### )/ { flush(); ef = FILENAME; el = FNR; et = $0; ew = words($0); blk = /^### /; new = 1 }
+      !new && ew && /[^[:space:]]/ && (blk || /^[[:space:]]+/) { ew += words($0) }   # Why:/Do instead: lines
+      /^[[:space:]]*$/ { flush() }
+      { l = $0; sub(/^(- |[0-9]+\. |### )/, "", l)
+        n = split(l, S, /[.!?]+[)"`]*[[:space:]]+/)
+        for (i = 1; i <= n; i++) if ((c = words(S[i])) > 40) { print FILENAME ":" FNR ": sentence of " c " words (aim for 30) → split it: " substr(S[i], 1, 60); break } }
+      END { flush() }' ${FILES[@]+"${FILES[@]}"} /dev/null | head -n 8)
+  # claims about the whole codebase in topic files (writing rule 10): a reminder to check every case
+  while IFS= read -r m; do echo "ℹ $m"; done < <(awk '
+      FNR == 1 { inc = 0; gen = 0; code = 0 }
+      /^<!-- scan:start/ { gen = 1; next } gen { if (/^<!-- scan:end/) gen = 0; next }
+      /^[[:space:]]*(```|~~~)/ { code = !code; next } code { next }
+      /^[[:space:]]*<!--/ { inc = 1 } inc { if (/-->/) inc = 0; next }
+      /^#/ || /^>/ || /unconfirmed/ { next }
+      { l = " " tolower($0) " "; gsub(/`[^`]*`/, "", l)
+        if (match(l, /[^a-z](all|each|every|only|always|never)[^a-z]|[^a-z]one [a-z]+ per[^a-z]/)) {
+          w = substr(l, RSTART + 1, RLENGTH - 2)
+          print FILENAME ":" FNR ": \"" w "\" — checked every case? name the exceptions or write what you saw: " substr($0, 1, 50) } }' \
+      $(printf '%s\n' ${FILES[@]+"${FILES[@]}"} | grep '^\.memory/topics/') /dev/null | head -n 5)
   # stale gotchas: older than PM_STALE_DAYS, seen ≤ 1, not #hold, never injected by hooks in that period
   today="$(date +%Y-%m-%d)"
   if [ -f .memory/gotchas.md ]; then

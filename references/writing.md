@@ -13,6 +13,7 @@ Every entry must make sense to someone who was **not** in this session and does 
    on: "Integration tests hang unless the database container is running", not "int tests hang (db)".
 2. **Say what, why, and what to do.** What happens or was decided, then why (cause, constraint, who
    asked), then what to do instead. The reason lets a future reader judge whether the entry still holds.
+   A decision's `Why:` gives the reason, not the list of files you touched (the diff has those).
 3. **Full sentences, no private shorthand.** No telegraphic fragments ("db flaky, retry"), no
    abbreviations you invented, no arrows or symbols in place of verbs. Explain a domain term or a
    code name the first time it appears in a file ("`netPrice` — the price after discount").
@@ -26,8 +27,35 @@ Every entry must make sense to someone who was **not** in this session and does 
    the entry.
 7. **No session narration.** Not "I tried X, then Y, then found…" — write the conclusion that
    remains true after the session.
-8. **One paragraph per line** in topic files and in `topics/codebase.md`. Prompt recall reads memory
-   line by line; a paragraph broken over several lines is recalled as fragments.
+8. **One paragraph per line** in topic files and in `topics/codebase.md`, with a blank line between
+   paragraphs (without it, Markdown shows them as one block). Prompt recall reads memory line by
+   line; a paragraph broken over several lines is recalled as fragments.
+9. **Short sentences.** About 30 words at most, one idea each; an entry stays under about 60 words.
+   A sentence held together by semicolons, parentheses inside parentheses or a list of ten names is
+   several sentences, or a table. `mem.sh lint` flags sentences over 40 words.
+10. **Check before you generalise.** "All", "every", "each", "only", "one per", "never" and "a single"
+   are claims about the whole codebase: write them only after checking every case (`grep`, a file
+   list). Otherwise name what you saw ("the request tests start an Express server"), not a rule
+   you guessed ("each test starts an Express server"). The same goes for inferences from names and
+   config: a tox env or npm script that exists is not proof that CI runs it (read the workflow), and
+   a file called `_json.py` is not proof that every serializer uses it (follow the call).
+11. **A reason explains; it does not repeat.** "Use ava, because the suite does not use describe()"
+   says the rule twice. Give the cause or the consequence; if the user gave no reason and none is
+   obvious, write "the user's preference".
+12. **The user's words and yours stay apart.** Record a user instruction with the scope the user
+   gave it: a fix for one function does not become a rule for `@src/`. Details you chose yourself
+   (a name, a placement, an exception, a wider scope) go in their own line marked
+   `(agent, unconfirmed)`, not inside the `(user)` entry. A convention you inferred yourself ("new
+   errors extend `KyError`", "update the readme with every change") is the same: an
+   `(agent, unconfirmed)` entry, never an unmarked Rule or a sentence in the layout notes. So is
+   your reading of a user rule (what it covers, an exception you allowed): its own decision, not a
+   clause inside a gotcha's `Why:`. One decision per entry: three choices are three entries.
+13. **One fact, one place.** Write a fact once, in the file the Capture table names; elsewhere point to
+   it ("see the Rule in index.md"). The same instruction as a Rule, a decision, a gotcha and a
+   progress line is four copies to keep in sync.
+14. **No verdicts without evidence.** "The project is mature", "the code is clean" or "changes are
+   rare" help nobody act. State the fact behind it (version 2.2.0, last feature in 2024) or leave
+   it out.
 
 ## Language
 
@@ -88,6 +116,16 @@ without opening the code or the chat?"* If not, rewrite it.
 1. **[2026-10-14] Implemented a robust, seamless retry strategy for the API** #api
    Why: it is important to note that various errors can occur.
 ```
+
+✗ Readable and specific, but wrong or mixed up (found in tests on real repositories):
+```
+- Errors live in `source/errors/`, all extending `KyError`.        ← two of the classes do not
+- 2026-10-30 · Raise TypeError for invalid arguments everywhere in @src/ (user)   ← the user asked about one check
+- Use `TypeError` for an empty key. The user asked for the check; the agent chose the details: it lives in `Signer.__init__`, not in `_make_keys_list`, so `Serializer` reports the error on the first `dumps`, and … (110 words)   ← user decision, agent choices and a gotcha in one paragraph
+```
+Fixed: name the exceptions or the cases you checked; keep the user's scope; split the paragraph into
+the user's decision `(user)`, the agent's choice `(agent, unconfirmed)` and a gotcha
+("`Serializer(\"\")` builds without error; the empty key fails only on the first `dumps`").
 
 ✓ A newcomer knows what happens, why, and what to do:
 ```

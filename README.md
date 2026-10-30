@@ -37,7 +37,8 @@ In Claude Code:
     /plugin marketplace add afdhaa/team-memory
     /plugin install team-memory@team-memory
 
-The plugin brings the skill and its hooks to every project you open, without touching the project's
+(Claude Code 2.1.275 or later: `/plugin install team-memory --marketplace afdhaa/team-memory` does
+both.) The plugin brings the skill and its hooks to every project you open, without touching the project's
 files. In a project without `.memory/`, ask the agent to start one ("set up project memory"); it runs
 the scan. The plugin does not add the AGENTS.md block, the pre-commit secret check or `merge=union`
 for teammates: run `npx team-memory` in a project that a team shares. Where a project has its own
@@ -193,17 +194,19 @@ explanation above it ("How it fits together" and "Project layout"); a re-scan ne
 
 | Agent | Reads the skill from | Hooks |
 |---|---|---|
-| Claude Code | `.claude/skills/` | yes, in `.claude/settings.json` |
+| Claude Code | `.claude/skills/` or the plugin | yes, in `.claude/settings.json` or the plugin |
 | Codex | `.agents/skills/` | yes, in `.codex/hooks.json` |
-| Gemini CLI | `GEMINI.md` (imports AGENTS.md) | yes, in `.gemini/settings.json`; tagged entries arrive right after an edit |
-| Cursor | AGENTS.md | yes, in `.cursor/hooks.json`; no recall with a prompt (Cursor's prompt hook cannot add context), tagged entries arrive right after an edit |
-| GitHub Copilot (CLI, cloud agent) | AGENTS.md | yes, in `.github/hooks/team-memory.json`: session start, `#hold`, reminder before stopping; no recall with a prompt or before an edit |
+| Gemini CLI (new in 4.2) | `GEMINI.md` (imports AGENTS.md) | yes, in `.gemini/settings.json`; tagged entries arrive right after an edit |
+| Cursor (new in 4.2) | AGENTS.md | yes, in `.cursor/hooks.json`; no recall with a prompt (Cursor's prompt hook cannot add context), tagged entries arrive right after an edit |
+| GitHub Copilot, CLI and cloud agent (new in 4.2) | AGENTS.md | yes, in `.github/hooks/team-memory.json`: session start, `#hold`, reminder before stopping; no recall with a prompt or before an edit |
 | Pi / omp | `.agents/skills/`, `~/.agents/skills/` | no: the agent follows the skill itself (type `/skill:team-memory` to load it) |
 | OpenCode, Antigravity | `.agents/skills/` | no: through the block in AGENTS.md |
 
 Turn the hooks off for a session with `export PM_HOOKS=off`. Tuning: `PM_RECALL_MAX` (entries per
 message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
-`PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY` (path of `user.md`).
+`PM_UNCONFIRMED_DAYS` (30), `PM_USER_MEMORY` (path of `user.md`). The Gemini CLI, Cursor and Copilot
+hooks follow those agents' documentation but are new: please
+[report](https://github.com/afdhaa/team-memory/issues) what does not work.
 
 ## Teams
 
@@ -225,8 +228,9 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
 - **No network access.** The scripts make no HTTP requests and send no telemetry; git is only read
   locally (`git ls-files`, `git log`), never fetched or pushed.
 - **Official sources:** the npm package [`team-memory`](https://www.npmjs.com/package/team-memory),
-  [github.com/afdhaa/team-memory](https://github.com/afdhaa/team-memory) and its listing on skills.sh
-  (`afdhaa/team-memory`). Anything else claiming to be this skill is not. Versions published by GitHub
+  [github.com/afdhaa/team-memory](https://github.com/afdhaa/team-memory) (also the Claude Code plugin
+  marketplace `afdhaa/team-memory`) and its listing on skills.sh (`afdhaa/team-memory`). Anything else
+  claiming to be this skill is not. Versions published by GitHub
   Actions carry npm provenance: the npm page links them to the commit and workflow run that built them.
 - **Memory reaches your model provider.** The hooks add memory to the agent's context, which is sent
   to Anthropic, OpenAI or whichever provider your agent uses, like any file the agent reads. Whether
@@ -241,9 +245,12 @@ message, 5), `PM_MAX_NUDGES` (reminders per session, 3), `PM_STALE_DAYS` (120),
   every teammate's machine, so have changes reviewed, for example in `.github/CODEOWNERS`:
 
       /.memory/                          @your-org/maintainers
-      /.agents/skills/team-memory/    @your-org/maintainers
+      /.agents/skills/team-memory/       @your-org/maintainers
       /.claude/settings.json             @your-org/maintainers
       /.codex/hooks.json                 @your-org/maintainers
+      /.gemini/settings.json             @your-org/maintainers
+      /.cursor/hooks.json                @your-org/maintainers
+      /.github/hooks/                    @your-org/maintainers
 
 ## Update and uninstall
 
@@ -255,17 +262,17 @@ To uninstall from a project:
     npx team-memory --remove-hooks    # hooks and the pre-commit check; files left empty are deleted
     rm -rf .agents/skills/team-memory .claude/skills/team-memory
 
-Then delete the `team-memory` block in `AGENTS.md` (and `CLAUDE.md`, or `CLAUDE.md` itself if it only
-says `@AGENTS.md`), and the `.memory/…` lines in `.gitignore` and `.gitattributes`. `.memory/` stays
+Then delete the `team-memory` block in `AGENTS.md` (and `CLAUDE.md` or `GEMINI.md`, or the file itself
+if it only imports `AGENTS.md`), and the `.memory/…` lines in `.gitignore` and `.gitattributes`. `.memory/` stays
 yours. The global skill (`--global`) lives in `~/.agents/skills`, `~/.claude/skills`,
 `~/.config/opencode/skills` and `~/.gemini/antigravity/skills` (folder `team-memory`); your
-preferences are in `~/.agents/memory/user.md`.
+preferences are in `~/.agents/memory/user.md`. The plugin: `/plugin uninstall team-memory@team-memory`.
 
 **Upgrading from 3.x:** before 4.0.0 the skill was named `project-memory`. Run `npx team-memory@latest`
 in the project once: it removes `.agents/skills/project-memory` and `.claude/skills/project-memory`,
 moves the hooks, the AGENTS.md/CLAUDE.md block and the pre-commit check to the new name, and updates
-the paths in `.memory/README.md`; `npx team-memory doctor` then confirms nothing is left. Commit the result so teammates get it. `--global` does the same for
-the global copies. Installed from skills.sh? Run `npx skills remove project-memory`, then
+the paths in `.memory/README.md`; `npx team-memory doctor` then confirms nothing is left. Commit the
+result so teammates get it. `--global` does the same for the global copies. Installed from skills.sh? Run `npx skills remove project-memory`, then
 `npx skills add afdhaa/team-memory`.
 
 **Without npm:** clone this repository once and use `bash <clone>/scripts/install.sh` with the same
@@ -278,16 +285,16 @@ options as above.
 CI runs the self-test on every push and pull request: Linux with bash 5 (mawk and gawk) and macOS
 with the system bash 3.2 and BWK awk.
 
-**Release:** bump the version in `SKILL.md` (`metadata.version`), `package.json` and
-`CHANGELOG.md` together, commit, then push a tag:
+**Release:** bump the version in `SKILL.md` (`metadata.version`), `package.json`,
+`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` and `CHANGELOG.md` together (the
+self-test checks they match), commit, then push a tag:
 
     git tag vX.Y.Z && git push origin vX.Y.Z
 
-The *Publish to npm* workflow checks that the tag matches both files, runs the self-test and
-publishes with npm trusted publishing: no npm token is stored, and the npm page shows a provenance
-statement linking the package to this repository. One-time setup on npmjs.com: package
-**Settings → Trusted Publisher → GitHub Actions**, repository `afdhaa/team-memory`, workflow `publish.yml`.
-Without it, publish by hand with `npm publish` (asks for the 2FA code).
+The *Publish to npm* workflow checks the tag against the versions, runs the self-test and publishes
+with npm trusted publishing: no npm token is stored, and the package carries a provenance statement
+linking it to this repository. The Claude Code plugin is read from the repository, so it updates
+with the push.
 
 ## License
 

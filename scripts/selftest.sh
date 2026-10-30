@@ -202,6 +202,15 @@ printf '1. **[2026-10-21] We leverage a robust cache** #cache (agent, seen: 1)\n
 o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
 check "lint flags filler wording, not code spans" 'printf "%s" "$o" | grep -q "\"leverage\", \"robust\"" && ! printf "%s" "$o" | grep -q "\"robust\", \"robust\""' "$o"
 sed '$d' .memory/gotchas.md | sed '$d' > g.tmp && mv g.tmp .memory/gotchas.md
+long="Load reads the file and then sets every variable that is not set yet and it skips comments and blank lines and it also expands variables written with a dollar sign and braces before it returns the map to the caller who asked for it"
+printf -- '- 2026-10-21 · Short title. #x (user)\n\n### 2026-10-21 · Keep the parser #parser @src/p.go (user)\nWhy: %s.\nRejected: a library, because it reads files differently and the users depend on the current behaviour of the hand-written parser in every release, and a new dependency would need the maintainer to agree first.\n' "$long" >> .memory/decisions.md
+o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
+check "lint notes long sentences and entries, without counting them as issues" 'printf "%s" "$o" | grep -q "sentence of 4[0-9] words" && printf "%s" "$o" | grep -q "entry of [0-9]* words" && ! printf "%s" "$o" | grep -q "Short title"' "$o"
+n=$(wc -l < .memory/decisions.md); awk -v n=$((n - 5)) 'NR <= n' .memory/decisions.md > d.tmp && mv d.tmp .memory/decisions.md
+mkdir -p .memory/topics && printf '# Area\n\nEach handler lives in its own module under `src/`.\nEach handler (agent, unconfirmed) may differ.\n' > .memory/topics/area.md
+o="$(bash "$SRC/scripts/mem.sh" lint 2>&1)"
+check "lint reminds to check \"each\" claims in topics, not unconfirmed ones" 'printf "%s" "$o" | grep -q "area.md:3: \"each\" — checked every case" && ! printf "%s" "$o" | grep -q "area.md:4"' "$o"
+rm -f .memory/topics/area.md
 check "bootstrap asks for English memory" 'grep -q "Write memory in English" "$P/AGENTS.md"' "$(cat "$P/AGENTS.md")"
 check "scan: layout lists folders, hides one-file subfolders" 'grep -q "^- .src/. — " .memory/topics/codebase.md && ! grep -q "^  - .src/app/. — 1 files" .memory/topics/codebase.md' "$(cat .memory/topics/codebase.md)"
 check ".memory/README.md created, not used as memory" '[ -f .memory/README.md ] && ! bash "$SRC/scripts/mem.sh" search pull requests reviewed | grep -q README' "$(bash "$SRC/scripts/mem.sh" search pull requests reviewed)"
@@ -358,6 +367,11 @@ mkdir -p .github/workflows && touch .github/workflows/update-changelog.yml; rm -
 check "changelog: a workflow that updates the changelog" '[ "$(cl)" = "changelog: generated from commits (.github/workflows/update-changelog.yml)" ]' "$(cl)"; rm -rf .github; mkdir .changeset; printf '{}' > release-please-config.json
 printf -- '- Changelog: none\n' >> .memory/index.md; check "changelog: the user's Rule wins" '[ "$(cl)" = "changelog: none (set in index.md)" ]' "$(cl)"
 sed -i.b '$d' .memory/index.md; rm -rf .memory/index.md.b .changeset release-please-config.json
+printf -- '- Changelog: every user-facing change needs a news fragment (user)\n' >> .memory/index.md
+check "changelog: a sentence in the Rule is not a file name" '[ "$(cl)" = "changelog: CHANGELOG.md" ]' "$(cl)"
+sed -i.b '$d' .memory/index.md; printf -- '- Changelog: docs/changes.rst\n' >> .memory/index.md
+check "changelog: a path in the Rule wins" '[ "$(cl)" = "changelog: docs/changes.rst (set in index.md)" ]' "$(cl)"
+sed -i.b '$d' .memory/index.md; rm -f .memory/index.md.b
 printf '{"session_id":"%s-cl","cwd":"%s","source":"startup"}' "$RUN" "$K" | bash "$SRC/hooks/pm-hook.sh" session-start claude >/dev/null; sleep 1; echo x > src/b.js
 o="$(printf '{"session_id":"%s-cl","cwd":"%s"}' "$RUN" "$K" | bash "$SRC/hooks/pm-hook.sh" stop claude)"
 check "stop: reminds of the changelog the project keeps" 'printf "%s" "$o" | grep -q "unreleased changes at the top of CHANGELOG.md" && printf "%s" "$o" | grep -q "progress.md (your own work state)"' "$o"
@@ -582,6 +596,29 @@ bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codeba
 check "scan: the project is not its own dependency" 'printf "%s" "$cb" | grep -q "^- Python (pip) — Pydantic$"' "$(printf "%s" "$cb" | grep "Python (")"
 check "scan: tests/runtests.py is a command" 'printf "%s" "$cb" | grep -q "python tests/runtests.py"'
 check "scan: no activity from a single (root) commit" '! printf "%s" "$cb" | grep -q "Recently active"'
+mkdir -p .github/workflows && cat > .github/workflows/tests.yml <<'YML'
+name: Tests
+on:
+  - push
+  - pull_request
+jobs:
+  test:
+    strategy:
+      matrix:
+        # the versions we support
+        python: ['3.12', '3.13']
+        include:
+          - {name: Mac, os: macos-latest}
+    steps:
+      - run: pip install -e .
+      - run: |
+          pytest -q
+          coverage report
+      - run: "tox -e typing"
+YML
+bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
+check "scan: CI workflow with triggers, real commands (installs left out) and matrix" 'printf "%s" "$cb" | grep -qF -- "- GitHub Actions \`tests.yml\` (on push, pull_request): \`pytest -q …\`, \`tox -e typing\`; matrix: python 3.12, 3.13; os macos-latest"' "$(printf "%s" "$cb" | grep "GitHub Actions")"
+rm -rf .github
 touch src/flask/views.py && git add -A && git commit -qm two && bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
 check "scan: activity leaves out the commit without a parent" 'printf "%s" "$cb" | grep -q "last 1 commits" && printf "%s" "$cb" | grep -q "\`src/flask/\` 1$"' "$(printf "%s" "$cb" | grep -A1 "Recently")"
 cd "$S"

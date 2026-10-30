@@ -3,6 +3,46 @@
 All notable changes. Versions follow [semver](https://semver.org): minor for new features,
 patch for fixes and reorganisation.
 
+## 4.3.0
+From a writing test on three real repositories (itsdangerous, ky, godotenv): each memory was written
+by a fresh agent following the skill, then checked claim by claim against the code. 91% of 166
+claims were correct and no entry was generic advice; the misses were over-generalised claims, dense
+paragraphs and the agent's own choices filed under the user's name. With these changes, a third
+round on the same scenarios answered 19 of 20 quiz questions from memory (was 14, plus 4 partly),
+2 of 143 claims were wrong (was 6 of 120), and readability went from 3 to 4 out of 5.
+A second test on three other repositories (log, pipx, commander.js), three rounds with the same
+scenarios and quizzes: wrong claims went from 9 of 217 (4.1%) to 3 of 212 (1.4%), completeness from
+3.3 to 4.0 out of 5, and no quiz answer was wrong or missing (was 1 of 30).
+- `references/writing.md`: rules for short sentences, checking before writing "all/every/each",
+  inferences from names and config, reasons that explain instead of repeat, keeping the user's
+  scope and the agent's choices (and inferred conventions) apart, one fact in one place, blank lines
+  between paragraphs, and no verdicts without evidence; bad examples from the test.
+- SKILL.md: a surprise inside a decision and an answer found by reading code become gotchas; a
+  project-wide convention stated inside a correction is a Rule; the agent's own details get their
+  own `(agent, unconfirmed)` line.
+- `mem.sh lint` notes sentences over 40 words and entries over 80 words (information, not issues).
+- The scan lists, for each GitHub Actions workflow, its triggers, the commands it really runs
+  (installs left out) and its matrix values, so the agent stops guessing CI from tox envs or npm
+  scripts.
+- SKILL.md: an answer that is in the docs but hard to find gets a one-line pointer; `progress.md`
+  holds only work the user asked for; runtime behaviour concluded from reading code stays
+  `unconfirmed` until something ran it.
+- SKILL.md: before finishing a task the agent rereads its replies: caveats it told the user go to
+  `gotchas.md` or a topic, behaviour it chose itself to `decisions.md` as `(agent, unconfirmed)`, open
+  questions under Blocked. A user instruction that contradicts the code is kept as a User directive
+  with the evidence and asked about. Entries made from the user's words in another language always
+  get some of those words as tags. A `(user)` entry holds only what the user said.
+- Onboarding (`references/workflows.md`): before saving, the agent checks its "all/each/every/only"
+  sentences against a file listing and its doc-derived sentences against the code.
+- `mem.sh lint` reminds to check "all/each/every/only/one X per Y" sentences in topic files.
+- `mem.sh changelog`: a sentence after `Changelog:` in a Rule is no longer read as a file name, and a
+  changelog named in a Rule gets the same guidance as a detected one (no invented "Unreleased"
+  section).
+- The scan's CI summary leaves out runner setup (`rustup`, `echo >> $GITHUB_ENV`, `cd`…) and lists
+  up to 8 commands per workflow.
+- README: plugin install in one step, uninstalling the plugin, agent table, CODEOWNERS example and
+  release steps brought up to date.
+
 ## 4.2.0
 - **Claude Code plugin.** `/plugin marketplace add afdhaa/team-memory`, then
   `/plugin install team-memory@team-memory`: the skill and its hooks in every project, without

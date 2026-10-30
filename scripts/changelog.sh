@@ -7,10 +7,12 @@ changelog_info() {
   local r="${1:-.}" f v
   # the user's answer, recorded once in index.md Rules: "- Changelog: CHANGELOG.md" / "- Changelog: none"
   v="$(sed -n 's/^[[:space:]]*[-*][[:space:]]*[Cc]hangelog:[[:space:]]*`\{0,1\}\([^`[:space:]]*\).*/\1/p' "$r/.memory/index.md" 2>/dev/null | head -n1)"
-  if [ -n "$v" ]; then
-    v="${v%[;,.:]}"   # "- Changelog: none; …", "CHANGES.md."
-    case "$(printf '%s' "$v" | tr 'A-Z' 'a-z')" in none|no|-|"") printf 'rule\tnone\tthis project keeps no changelog (index.md Rules): record nothing\n' ;;
-      *) printf 'rule\t%s\tadd one line to the section for unreleased changes at the top of %s (create the file, or an "Unreleased" section, if missing), in the style the file already uses\n' "$v" "$v" ;; esac
+  v="${v%[;,.:]}"   # "- Changelog: none; …", "CHANGES.md."
+  case "$(printf '%s' "$v" | tr 'A-Z' 'a-z')" in
+    none|no|-) printf 'rule\tnone\tthis project keeps no changelog (index.md Rules): record nothing\n'; return ;; esac
+  # a file name ("CHANGES.md", "docs/changelog.rst", "NEWS"); a sentence ("every change needs a fragment") is not one
+  if [ -n "$v" ] && { case "$v" in */*|*.*) true ;; *) printf '%s' "$v" | grep -qE '^[A-Z][A-Z_-]+$' ;; esac; }; then
+    printf 'rule\t%s\tadd one line to the section for unreleased changes at the top of %s (it may be called "Unreleased", "dev", "main" or carry the next version; create the file, or "Unreleased", only if there is none), in the style the file already uses\n' "$v" "$v"
     return; fi
   if [ -d "$r/.changeset" ]; then
     printf 'fragments\t.changeset/\tadd a changeset: a new .changeset/<name>.md with the package bump and one user-facing sentence (npx changeset)\n'; return; fi
