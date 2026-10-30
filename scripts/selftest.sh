@@ -248,6 +248,13 @@ check "scan: Key facts skip image folders and show sub-package stacks" '! grep "
 printf -- '- Check the entries in gotchas.md (gotchas.md, unconfirmed) tomorrow.\n' >> .memory/progress.md
 o="$(bash "$SRC/scripts/mem.sh" review 2>&1)"; check "review ignores prose that mentions \"unconfirmed\"" '! printf "%s" "$o" | grep -q "progress.md"' "$o"
 o="$(bash "$SRC/scripts/mem.sh" search fastapi 2>&1)"; check "search skips the generated scan block" '! printf "%s" "$o" | grep -q "codebase.md"' "$o"
+W="$TMP/many-pkgs"; mkdir -p "$W" && cd "$W" && git init -q
+printf '<div align="center">\n  <picture>\n    <source\n      media="(prefers-color-scheme: dark)"\n      srcset="logo.png"\n    />\n  </picture>\n</div>\n\nA small library that caches server state for web apps.\n' > README.md
+for i in 01 02 03 04 05 06 07 08 09 10; do mkdir -p packages/p$i examples/e$i; printf '{"name":"p%s"}\n' $i > packages/p$i/package.json; printf '{"name":"e%s"}\n' $i > examples/e$i/package.json; done
+printf '{"name":"root"}\n' > package.json; git add -A && git commit -qm init
+bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
+check "scan: README summary skips an HTML tag spread over lines" 'printf "%s" "$cb" | grep -q "describes itself as: \"A small library that caches server state for web apps.\""' "$(printf "%s" "$cb" | grep describes)"
+check "scan: packages beyond the first 8 are named, examples are not packages" 'printf "%s" "$cb" | grep -q "^- 2 more packages: \`packages/p" && ! printf "%s" "$cb" | grep -q "examples/e01/\` —"' "$(printf "%s" "$cb" | grep -E "more packages|Other packages")"
 cd "$S"
 
 
@@ -367,6 +374,12 @@ mkdir -p .github/workflows && touch .github/workflows/update-changelog.yml; rm -
 check "changelog: a workflow that updates the changelog" '[ "$(cl)" = "changelog: generated from commits (.github/workflows/update-changelog.yml)" ]' "$(cl)"; rm -rf .github; mkdir .changeset; printf '{}' > release-please-config.json
 printf -- '- Changelog: none\n' >> .memory/index.md; check "changelog: the user's Rule wins" '[ "$(cl)" = "changelog: none (set in index.md)" ]' "$(cl)"
 sed -i.b '$d' .memory/index.md; rm -rf .memory/index.md.b .changeset release-please-config.json
+mv CHANGELOG.md CHANGELOG.bak; mkdir -p packages/core packages/cli
+printf '# Changelog\n\n## Unreleased\n' > packages/core/CHANGELOG.md
+check "changelog: one per package in a monorepo" '[ "$(cl)" = "changelog: packages/*/CHANGELOG.md" ]' "$(cl)"
+printf '## [2.1.0](https://github.com/o/r/compare/v2.0.0...v2.1.0) (2026-10-01)\n### Bug Fixes\n' > packages/core/CHANGELOG.md
+check "changelog: per-package changelogs written by conventional-changelog are generated" '[ "$(cl)" = "changelog: generated from commits (packages/*/CHANGELOG.md)" ]' "$(cl)"
+rm -rf packages; mv CHANGELOG.bak CHANGELOG.md
 printf -- '- Changelog: every user-facing change needs a news fragment (user)\n' >> .memory/index.md
 check "changelog: a sentence in the Rule is not a file name" '[ "$(cl)" = "changelog: CHANGELOG.md" ]' "$(cl)"
 sed -i.b '$d' .memory/index.md; printf -- '- Changelog: docs/changes.rst\n' >> .memory/index.md
@@ -617,7 +630,7 @@ jobs:
       - run: "tox -e typing"
 YML
 bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
-check "scan: CI workflow with triggers, real commands (installs left out) and matrix" 'printf "%s" "$cb" | grep -qF -- "- GitHub Actions \`tests.yml\` (on push, pull_request): \`pytest -q …\`, \`tox -e typing\`; matrix: python 3.12, 3.13; os macos-latest"' "$(printf "%s" "$cb" | grep "GitHub Actions")"
+check "scan: CI workflow with triggers, real commands (installs left out) and matrix" 'printf "%s" "$cb" | grep -qF -- "- GitHub Actions \`tests.yml\` (on push, pull_request): \`pytest -q …\`, \`tox -e typing\`; matrix: python 3.12, 3.13; plus (os macos-latest)"' "$(printf "%s" "$cb" | grep "GitHub Actions")"
 rm -rf .github
 touch src/flask/views.py && git add -A && git commit -qm two && bash "$SRC/scripts/mem.sh" scan >/dev/null 2>&1; cb="$(cat .memory/topics/codebase.md)"
 check "scan: activity leaves out the commit without a parent" 'printf "%s" "$cb" | grep -q "last 1 commits" && printf "%s" "$cb" | grep -q "\`src/flask/\` 1$"' "$(printf "%s" "$cb" | grep -A1 "Recently")"

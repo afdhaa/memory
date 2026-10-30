@@ -20,6 +20,8 @@ No `.memory/` anywhere up the tree: from the project root run `bash scripts/mem.
    saw); every sentence you took from the docs against the code (they agree: point to the doc
    instead; they differ: write what the code does, plus an `(agent, unconfirmed)` note on the
    mismatch). Key facts stay one line each and do not repeat what `codebase.md` or a Rule says.
+   Then run `mem.sh lint` and act on every `checked every case?` note: confirm the sentence with a
+   listing or `grep`, or rewrite it.
    **Small repo** (under ~40 files): 1–2 paragraphs; leave "Project layout" out when the generated
    Layout already says it all.
 4. When the repo already documents its layout, commands, endpoints or design (AGENTS.md, CLAUDE.md,

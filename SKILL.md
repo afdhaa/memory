@@ -84,7 +84,9 @@ Write **when it happens**, not only at the end:
 - **Before you finish a task, reread your replies in it.** Every caveat or surprise you told the user
   is in `gotchas.md` or a topic; every behaviour you chose that the user did not specify (scope,
   order, a side effect) is in `decisions.md` as `(agent, unconfirmed)`; every question still open is
-  under Blocked in `progress.md`. A chat reply and `progress.md` are not memory the team sees.
+  under Blocked in `progress.md`. A chat reply, `progress.md` and a clause inside a decision are not
+  where a teammate looks for a pitfall: give each its own entry. Then run `mem.sh lint` and act on
+  every `checked every case?` note (confirm it with `grep`, or rewrite the sentence).
 - **The project's own instructions come first** (AGENTS.md, CONTRIBUTING.md, `docs/`). Don't copy
   them; record only what they lack and point to them. If the user contradicts them, ask which wins.
 - **Filter:** *would a fresh agent next week waste time or make a mistake without this?* Don't store
@@ -92,8 +94,8 @@ Write **when it happens**, not only at the end:
 - **Never store secrets** (keys, tokens, passwords, connection strings, personal data): write where
   they live (`.env` → `STRIPE_SECRET_KEY`). Found one in memory? Delete it, tell the user to rotate it.
 - **Keep the user's scope.** An instruction for one function or one task is not a project-wide Rule;
-  details you added yourself (a name, a placement, a wider scope) get their own `(agent, unconfirmed)`
-  line, not the user's `(user)` entry.
+  details you added yourself (a name, a placement, a wider scope, an exception you found) get their
+  own `(agent, unconfirmed)` line right below the user's entry, never inside the `(user)` text.
 - **Before adding,** search for the same subject. If it exists, increment `seen`, refresh the date
   and sharpen it instead of duplicating. Changed facts: edit in place, `(updated YYYY-MM-DD, was: …)`.
   Reversed decisions: `~~old~~ superseded YYYY-MM-DD → see …`, never deleted.

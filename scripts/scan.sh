@@ -146,11 +146,12 @@ detect_stack
 # ---- sub-packages (monorepos): manifests one or two folders deep ----
 PLAIN=""
 SUBDIRS="$(printf '%s\n' "$FILES" | grep -E '^[^/]+(/[^/]+)?/(package\.json|pyproject\.toml|requirements\.txt|go\.mod|Cargo\.toml|composer\.json|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|mix\.exs)$' |
-  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|samples?|fixtures?|tests?|__tests__|e2e|docs?|bench(mark)?s?|benchmark-apps|playgrounds?|templates?|vendor-bin|tools?/[^/]+-bin|\.[^/]+)/' | sed 's#/[^/]*$##' | awk '!s[$0]++')"
+  grep -vE '(^|/)(node_modules|vendor|dist|build|examples?|samples?|integrations?|fixtures?|tests?|__tests__|e2e|docs?|bench(mark)?s?|benchmark-apps|playgrounds?|templates?|vendor-bin|tools?/[^/]+-bin|\.[^/]+)/' | sed 's#/[^/]*$##' | awk '!s[$0]++')"
 # the 8 largest packages (by files), not the first 8 alphabetically: in big monorepos those are the ones people work in
 SUBDIRS="$(printf '%s\n' "$FILES" | C="$SUBDIRS" awk -F/ 'BEGIN { n = split(ENVIRON["C"], L, "\n"); for (i = 1; i <= n; i++) if (L[i] != "") W[L[i]] = 1 }
   NF > 1 { if ($1 in W) c[$1]++; if (NF > 2 && (($1 "/" $2) in W)) c[$1 "/" $2]++ }
-  END { for (d in W) print c[d] + 0 "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | head -n 8 | cut -f2)"
+  END { for (d in W) print c[d] + 0 "\t" d }' | sort -t"$TAB" -k1,1nr -k2,2 | cut -f2)"
+REST="$(printf '%s\n' "$SUBDIRS" | sed -n '9,$p')"; SUBDIRS="$(printf '%s\n' "$SUBDIRS" | head -n 8)"
 while IFS= read -r d; do
   [ -n "$d" ] || continue
   sub="$(cd "$d" && SUBPKG=1 && STACK="" && CMDS="" && FACT_CMDS="" && detect_stack && { printf '%s\n' "$STACK" | grep -vE '^$|^- (Workspaces|Node version|Python version)'; echo "@@"; printf '%s\n' "$CMDS" | grep -v '^$' | head -n 8; })"
@@ -165,6 +166,10 @@ done <<EOF
 $SUBDIRS
 EOF
 [ -n "${PLAIN:-}" ] && STACK="${STACK}- Other packages (no framework detected): $PLAIN"$'\n'
+if [ -n "$REST" ]; then   # the smaller packages: named, so nobody concludes the list above is all there is
+  nr="$(printf '%s\n' "$REST" | grep -c .)"
+  STACK="${STACK}- $nr more packages: $(printf '%s\n' "$REST" | head -n 15 | sed "s#.*#$BT&/$BT#" | join ', ')$([ "$nr" -gt 15 ] && echo ', …')"$'\n'
+fi
 # shell scripts kept in scripts/ folders are usually the real entry points (test.sh, build.sh…)
 SH="$(printf '%s\n' "$FILES" | grep -E '(^|/)scripts/[^/]+\.sh$' | head -n 10 | sed 's/.*/`&`/' | join ', ')"
 [ -n "$SH" ] && CMDS="${CMDS}- Shell scripts: $SH"$'\n'
@@ -203,11 +208,25 @@ while IFS= read -r f; do
     function trim(t) { sub(/^[ \t]+/, "", t); sub(/[ \t]+$/, "", t); return t }
     function unq(t) { t = trim(t); gsub(/^["\047]|["\047]$/, "", t); return t }
     function add(list, v) { return index(", " list ", ", ", " v ", ") ? list : list (list != "" ? ", " : "") v }
-    function cmd(c, more) { c = trim(c); if (c ~ /^["\047]/ && substr(c, 1, 1) == substr(c, length(c))) c = unq(c)
+    function cmd(c, more) {   # 1: recorded (or a duplicate); 0: skipped as install or setup
+      c = trim(c); if (c ~ /^["\047]/ && substr(c, 1, 1) == substr(c, length(c))) c = unq(c)
+      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|npx playwright install|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo |exit |\$?(env:)?[A-Za-z_][A-Za-z0-9_]*=|cd |export |mkdir |chmod |sudo |set -|if |elif |then|else|fi$|for |while |done$|case |esac$|#)/) return 0   # installs and runner setup say nothing about what CI checks
       if (more) c = c " …"
-      if (c == "" || c ~ /^(npm (ci|install)|yarn( install)?$|pnpm (i|install)|bun install|pip3? install|python -m pip install|uv sync|poetry install|npx playwright install|(sudo )?apt(-get)? |brew install|go mod download|bundle install|composer install|git config|rustup |echo .*>> *"?\$GITHUB_|cd |export |mkdir |chmod |sudo )/) return   # installs and runner setup say nothing about what CI checks
       if (length(c) > 90) c = substr(c, 1, 87) "…"
-      if (!(c in seen) && nc < 8) { seen[c] = 1; cmds = cmds (nc++ ? ", " : "") "`" c "`" } }
+      if (!(c in seen) && nc < 8) { seen[c] = 1; cmds = cmds (nc++ ? ", " : "") "`" c "`" }
+      return 1 }
+    function pairs(t,   k, v, o) {   # "os: macos-latest, node: 24" or "{os: x, node: y}" → "os macos-latest, node 24"
+      sub(/[ \t]+#.*$/, "", t); gsub(/[{}]/, " ", t); sub(/^[ \t]*-[ \t]*/, "", t); o = ""
+      while (match(t, /[A-Za-z_-]+:[ \t]*[^,]+/)) {
+        k = substr(t, RSTART, RLENGTH); t = substr(t, RSTART + RLENGTH); v = k; sub(/^[^:]*:/, "", v); sub(/:.*/, "", k)
+        if (k == "name" || (v = unq(v)) == "" || v ~ /\$\{/) continue
+        o = o (o != "" ? ", " : "") k " " v }
+      return o }
+    function combo(t,   p) {   # one entry of a matrix include list, possibly over several lines
+      if (t ~ /^[ \t]*#/) return
+      if (t ~ /^[ \t]*-/) { nci++ }
+      if (nci == 0) return
+      p = pairs(t); if (p != "") CI[nci] = CI[nci] (CI[nci] != "" ? ", " : "") p }
     function mvals(t,   k, v, n, i, x) {   # key: value pairs on a matrix line, flow ({python: x, os: y}) or block (python: [a, b])
       if (t ~ /^[ \t]*#/) return; sub(/[ \t]+#.*$/, "", t)
       if (t ~ /^[ \t]*-[ \t]*[^:{ \t][^:{]*$/ && pk != "") { sub(/^[ \t]*-[ \t]*/, "", t); if ((x = unq(t)) != "" && x !~ /\$\{/) M[pk] = add(M[pk], x); return }   # block list under "key:"
@@ -223,16 +242,29 @@ while IFS= read -r f; do
     inon && /^  [A-Za-z_]+:/ { t = $1; sub(/:$/, "", t); on = add(on, t) }
     inon && /^  - [A-Za-z_]+/ { on = add(on, $2) }
     /^[ \t]*matrix:/ { match($0, /^[ \t]*/); mi = RLENGTH; inm = 1; t = $0; sub(/^[ \t]*matrix:/, "", t); if (trim(t) != "") mvals(t); next }
-    inm { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH <= mi) inm = 0; else { mvals($0); next } }
+    inm { match($0, /^[ \t]*/); ind = RLENGTH
+      if ($0 ~ /[^ \t]/ && ind <= mi) inm = 0
+      else {   # include: extra combinations, listed as they are; exclude: left out
+        if ($0 ~ /^[ \t]*(include|exclude):/) { ink = ($0 ~ /include/) ? 1 : 2; ki = ind; next }
+        if (ink && $0 ~ /[^ \t]/ && ind <= ki) ink = 0
+        if (ink) { if (ink == 1) combo($0); next }
+        mvals($0); next } }
     blk == 1 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/) { if (RLENGTH > bi) { first = $0; blk = 2; next } blk = 0 } }
-    blk == 2 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH > bi) { cmd(first, 1); blk = 0; next } if ($0 ~ /[^ \t]/) { cmd(first, 0); blk = 0 } }
+    blk == 2 { match($0, /^[ \t]*/); if ($0 ~ /[^ \t]/ && RLENGTH > bi) { if (cmd(first, 1)) blk = 0; else first = $0; next } if ($0 ~ /[^ \t]/) { cmd(first, 0); blk = 0 } }
     /^[ \t]*(- )?run:[ \t]*[|>]/ { match($0, /^[ \t]*(- )?/); bi = RLENGTH; blk = 1; next }
     /^[ \t]*(- )?run:/ { t = $0; sub(/^[ \t]*(- )?run:/, "", t); cmd(t) }
     END { if (blk == 2) cmd(first, 0); m = ""; for (i = 1; i <= nk; i++) if (M[keys[i]] != "") m = m (m != "" ? "; " : "") keys[i] " " M[keys[i]]
-      printf "- GitHub Actions `%s`%s: %s%s\n", name, (on != "" ? " (on " on ")" : ""), (cmds != "" ? cmds : "no run commands"), (m != "" ? "; matrix: " m : "") }' "$f")"$'\n'
+      x = ""; for (i = 1; i <= nci && i <= 8; i++) if (CI[i] != "") x = x (x != "" ? "; " : "") "(" CI[i] ")"
+      if (nci > 8) x = x "; …"
+      if (x != "") m = (m != "" ? m "; plus " : "entries ") x
+      if (cmds == "") { print "NOCMD " name; exit }
+      printf "- GitHub Actions `%s`%s: %s%s\n", name, (on != "" ? " (on " on ")" : ""), cmds, (m != "" ? "; matrix: " m : "") }' "$f")"$'\n'
 done <<EOF
-$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' | head -n 8)
+$(printf '%s\n' "$FILES" | grep -E '^\.github/workflows/[^/]+\.ya?ml$' | head -n 12)
 EOF
+nocmd="$(printf '%s' "$INFRA" | sed -n 's/^NOCMD //p' | sed 's/.*/`&`/' | join ', ')"
+INFRA="$(printf '%s' "$INFRA" | grep -v '^NOCMD ')"$'\n'; [ "$INFRA" = $'\n' ] && INFRA=""
+[ -n "$nocmd" ] && INFRA="${INFRA}- GitHub Actions without shell commands (bots, issue and release automation): $nocmd"$'\n'
 for pair in ".gitlab-ci.yml:GitLab CI" "Jenkinsfile:Jenkins" ".circleci/config.yml:CircleCI" "bitbucket-pipelines.yml:Bitbucket Pipelines" \
             "vercel.json:Vercel" "netlify.toml:Netlify" "fly.toml:Fly.io" "Procfile:Procfile (Heroku-style)" "app.yaml:App Engine" \
             "serverless.yml:Serverless Framework" "render.yaml:Render" "railway.json:Railway" "wrangler.toml:Cloudflare Workers" "Chart.yaml:Helm"; do
@@ -311,6 +343,8 @@ if [ -n "$README_F" ]; then
            if (alert || s == "") { emit(); if (found != "") exit; next }
            sub(/^#+[[:space:]]*/, "", s); p = p (p != "" ? " " : "") s; pl++; next }
     { alert = 0 }
+    intag { if (/>/) intag = 0; next }   # inside an HTML tag spread over several lines (<picture>, <source …)
+    /^[[:space:]]*</ { t = $0; if (gsub(/</, "<", t) > gsub(/>/, ">", t)) intag = 1 }
     /^[[:space:]]*(<|!\[|\[!\[|\|)/ { emit(); if (found != "") exit; next }
     { p = p (p != "" ? " " : "") $0; pl++ }
     END { if (found == "") emit(); gsub(/[[:space:]]+/, " ", found); print title; print found }' "$README_F" |

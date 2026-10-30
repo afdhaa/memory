@@ -12,7 +12,10 @@ round on the same scenarios answered 19 of 20 quiz questions from memory (was 14
 2 of 143 claims were wrong (was 6 of 120), and readability went from 3 to 4 out of 5.
 A second test on three other repositories (log, pipx, commander.js), three rounds with the same
 scenarios and quizzes: wrong claims went from 9 of 217 (4.1%) to 3 of 212 (1.4%), completeness from
-3.3 to 4.0 out of 5, and no quiz answer was wrong or missing (was 1 of 30).
+3.3 to 4.0 out of 5, and no quiz answer was wrong or missing (was 1 of 30). On vite (2,916 files,
+a pnpm monorepo): 9 of 10 quiz answers correct, 85 of 90 claims correct, accuracy 5 out of 5. On
+TanStack Query (5,175 files, 29 packages): no quiz answer wrong (5 correct, 5 partly), 69 of 74
+claims correct.
 - `references/writing.md`: rules for short sentences, checking before writing "all/every/each",
   inferences from names and config, reasons that explain instead of repeat, keeping the user's
   scope and the agent's choices (and inferred conventions) apart, one fact in one place, blank lines
@@ -38,8 +41,19 @@ scenarios and quizzes: wrong claims went from 9 of 217 (4.1%) to 3 of 212 (1.4%)
 - `mem.sh changelog`: a sentence after `Changelog:` in a Rule is no longer read as a file name, and a
   changelog named in a Rule gets the same guidance as a detected one (no invented "Unreleased"
   section).
-- The scan's CI summary leaves out runner setup (`rustup`, `echo >> $GITHUB_ENV`, `cd`…) and lists
-  up to 8 commands per workflow.
+- The scan's CI summary leaves out runner setup (`rustup`, `echo`, variable assignments, `cd`…),
+  lists up to 8 commands per workflow, shows matrix `include` entries as extra combinations instead
+  of mixing them into the full matrix, and puts workflows without shell commands (bots, issue
+  automation) on one line.
+- The scan's README summary skips HTML tags spread over several lines (`<picture>`, `<source …>`), names
+  the packages beyond the eight it describes ("19 more packages: …"), and no longer counts
+  `integrations/` test apps as packages.
+- SKILL.md and onboarding: run `mem.sh lint` and act on every "checked every case?" note; an exception
+  or wider scope the agent adds to a user's instruction goes on its own `(agent, unconfirmed)` line
+  below it.
+- `mem.sh changelog` finds one changelog per package in a monorepo (`packages/*/CHANGELOG.md`), and
+  recognises changelogs written by conventional-changelog (version headings that link to a compare
+  URL) as generated. Before, vite got "no changelog: ask the user".
 - README: plugin install in one step, uninstalling the plugin, agent table, CODEOWNERS example and
   release steps brought up to date.
 
